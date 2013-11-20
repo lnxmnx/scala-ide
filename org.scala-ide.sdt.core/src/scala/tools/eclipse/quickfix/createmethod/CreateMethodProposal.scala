@@ -8,7 +8,6 @@ import scala.tools.eclipse.util.parsing.ScalariformParser
 import scala.tools.eclipse.util.parsing.ScalariformUtils
 import scala.tools.refactoring.implementations.AddMethod
 import scala.tools.refactoring.implementations.AddMethodTarget
-
 import org.eclipse.jdt.core.ICompilationUnit
 import org.eclipse.jdt.internal.ui.JavaPluginImages
 import org.eclipse.jdt.ui.text.java.IJavaCompletionProposal
@@ -18,6 +17,7 @@ import org.eclipse.jface.text.contentassist.IContextInformation
 import org.eclipse.swt.graphics.Image
 import org.eclipse.swt.graphics.Point
 import org.eclipse.text.edits.ReplaceEdit
+import scala.sprinter.printers.TypePrinters
 
 case class CreateMethodProposal(fullyQualifiedEnclosingType: Option[String], method: String, target: AddMethodTarget, compilationUnit: ICompilationUnit, pos: Position) extends IJavaCompletionProposal {
   private val UnaryMethodNames = "+-!~".map("unary_" + _)
@@ -37,7 +37,10 @@ case class CreateMethodProposal(fullyQualifiedEnclosingType: Option[String], met
         val tpe = typedTree.tpe.resultType.underlying
         if (tpe.isError) None
         else if (tpe.toString == "Null") Some("AnyRef") //there must be a better condition
-        else Some(tpe.toString) //do we want tpe.isError? tpe.isErroneous?
+        else {
+          val sprinterType = TypePrinters.showType(compiler, tpe, context)
+          Some(sprinterType) //do we want tpe.isError? tpe.isErroneous?
+        }
       }).flatten.getOrElse("Any")
     }) getOrElse ("Any")
   }
@@ -66,7 +69,7 @@ case class CreateMethodProposal(fullyQualifiedEnclosingType: Option[String], met
   }
   private val parametersWithSimpleName = for (parameterList <- rawParameters)
     yield for ((name, tpe) <- parameterList) yield
-      (name, tpe.substring(tpe.lastIndexOf('.') + 1))
+      (name, tpe) //to check [Sprinter] - do we need to remove full prefix? - (name, tpe.substring(tpe.lastIndexOf('.') + 1))
   private val parameters = ParameterListUniquifier.uniquifyParameterNames(parametersWithSimpleName)
   private val returnType: ReturnType = if (UnaryMethodNames.contains(method)) className else rawReturnType
 

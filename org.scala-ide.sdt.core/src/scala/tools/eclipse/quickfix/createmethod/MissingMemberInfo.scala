@@ -17,6 +17,7 @@ import org.eclipse.jdt.core.search.TypeNameMatch
 import org.eclipse.jdt.internal.corext.util.TypeNameMatchCollector
 import org.eclipse.jface.text.Position
 import scalariform.parser.AstNode
+import scala.reflect.internal.Types
 
 class MissingMemberInfo(
     compilationUnit: ICompilationUnit,
@@ -118,6 +119,7 @@ object MissingMemberInfo {
                 //eg Function2[Int,String,Double] is (Int, String) => Double,
                 //so we will make method(arg: Int, arg1: String): Double = { ??? }
                 val args = paramTypeRef.args
+                //TODO [add Sprinter here]
                 val parameters = List(args.init.map(arg => ("arg", arg.toString)))
 
                 //when the return type is a type parameter, we don't want it, we'll return None

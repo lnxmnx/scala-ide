@@ -1,12 +1,12 @@
 package scala.tools.eclipse.quickfix.explicit
 
 import org.eclipse.jdt.ui.text.java.IJavaCompletionProposal
-
 import scala.collection.immutable
 import scala.reflect.internal.Chars
 import scala.tools.eclipse.compiler.Token
 import scala.tools.eclipse.javaelements.ScalaSourceFile
 import scala.tools.nsc.ast.parser.Tokens
+import scala.sprinter.printers.TypePrinters
 
 /** A quick fix that adds an explicit return type to a given val or def
  */
@@ -38,7 +38,11 @@ object ExplicitReturnType {
       }
 
       def expandProposal(vd: ValOrDefDef): Option[IJavaCompletionProposal] =
-        compiler.askOption { () => vd.tpt.toString } flatMap { tpe =>
+        compiler.askOption { () =>
+          val context = compiler.doLocateContext(vd.pos)
+          val sprinterType = TypePrinters.showType(compiler, vd.tpt, context)
+          sprinterType
+        } flatMap { tpe =>
           val insertion = findInsertionPoint(vd)
           // safety check: don't modify anything outside the original tree range
           if (vd.pos.startOrPoint <= insertion && insertion <= vd.pos.endOrPoint) {
