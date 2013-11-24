@@ -30,6 +30,7 @@ import scala.tools.eclipse.semantic.SemanticAction
 import scala.tools.eclipse.properties.ImplicitsPreferencePage
 import org.eclipse.jface.text.Region
 import scala.tools.eclipse.hyperlink.text._
+import scala.sprinter.printers.PrettyPrinters
 
 
 /**
@@ -110,14 +111,19 @@ class ImplicitHighlightingPresenter(sourceViewer: ISourceViewer) extends Semanti
   //TODO monitor P_ACTIVATE to remove existings annotation (true => false) or update openning file (false => true)
   override def apply(scu: ScalaCompilationUnit): Unit = {
     scu.doWithSourceFile { (sourceFile, compiler) =>
-      var annotationsToAdd = Map[Annotation, Position]()
+      //var annotationsToAdd = Map[Annotation, Position]()
+      var implicitAnnotationsToAdd = Map[Annotation, Position]()
+      var macroAnnotationsToAdd = Map[Annotation, Position]()
 
       if (pluginStore.getBoolean(P_ACTIVE)) {
         val response = new compiler.Response[compiler.Tree]
         compiler.askLoadedTyped(sourceFile, response)
         response.get(200) match {
           case Some(Left(_)) =>
-            annotationsToAdd = findAllImplicitConversions(compiler, scu, sourceFile)
+            val (implicitAnns, macroAnns) = findAllImplicitConversions(compiler, scu, sourceFile)
+            implicitAnnotationsToAdd = implicitAnns
+            macroAnnotationsToAdd = macroAnns
+//            annotationsToAdd = findAllImplicitConversions(compiler, scu, sourceFile)
           case Some(Right(exc)) =>
             logger.error(exc)
           case None =>
@@ -125,7 +131,9 @@ class ImplicitHighlightingPresenter(sourceViewer: ISourceViewer) extends Semanti
         }
       }
 
-      AnnotationUtils.update(sourceViewer, ImplicitAnnotation.ID, annotationsToAdd)
+//      AnnotationUtils.update(sourceViewer, ImplicitAnnotation.ID, annotationsToAdd)
+      AnnotationUtils.update(sourceViewer, ImplicitAnnotation.ID, implicitAnnotationsToAdd)
+      AnnotationUtils.update(sourceViewer, MacroExpansionAnnotation.ID, macroAnnotationsToAdd)
     }
   }
 }
@@ -183,7 +191,29 @@ object ImplicitHighlightingPresenter {
       (annotation, pos)
     }
 
+    def mkMacroExpansionAttachment(t: Tree) = {
+//      def printTree(t: Tree): String = {
+//        val stringWriter = new java.io.StringWriter
+//        val printWriter = new java.io.PrintWriter(stringWriter)
+//        val prettySyntaxTreePrinter =  new PrettySyntaxTreePrinter(printWriter)
+//        prettySyntaxTreePrinter.printTree(t)
+//        stringWriter.getBuffer().toString()
+//      }
+      assert(t.attachments.get[compiler.MacroExpansionAttachment].isDefined)
+      val Some(macroExpansionAttachment) = t.attachments.get[compiler.MacroExpansionAttachment]
+      val originalTree = macroExpansionAttachment.original
+      val txt = new String(sourceFile.content, originalTree.pos.startOrPoint,
+          math.max(0, originalTree.pos.endOrPoint - originalTree.pos.startOrPoint)).trim()
+      val sprinterTree = PrettyPrinters(compiler).show(t, PrettyPrinters.AFTER_NAMER, printMultiline = true)
+//      val expandedStr = printTree(t)
+
+      val annotation = new MacroExpansionAnnotation("Macro expansion found: " + txt + DisplayStringSeparator + sprinterTree)
+      val pos = mkPosition(originalTree.pos, txt)
+      (annotation, pos)
+    }
+
     var implicits = Map[Annotation, Position]()
+    var macroExpansions = Map[Annotation, Position]()
 
     new Traverser {
       override def traverse(t: Tree): Unit = {
@@ -194,12 +224,15 @@ object ImplicitHighlightingPresenter {
           case v: ApplyToImplicitArgs if !pluginStore.getBoolean(ImplicitsPreferencePage.P_CONVERSIONS_ONLY) =>
             val (annotation, pos) = mkImplicitArgumentAnnotation(v)
             implicits += (annotation -> pos)
+          case v if v.attachments.get[compiler.MacroExpansionAttachment].isDefined =>
+            val (annotation, pos) = mkMacroExpansionAttachment(v)
+            macroExpansions += (annotation -> pos)
           case _ =>
         }
         super.traverse(t)
       }
     }.traverse(compiler.loadedType(sourceFile).fold(identity, _ => compiler.EmptyTree))
 
-    implicits
+    (implicits, macroExpansions)
   }
 }

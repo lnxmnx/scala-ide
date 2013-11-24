@@ -31,6 +31,8 @@ case class CreateMethodProposal(fullyQualifiedEnclosingType: Option[String], met
       compiler.askOption(() => {
         val length = end - start
         val context = compiler.doLocateContext(new RangePosition(srcFile, start, start, start + length-1))
+        //TODO modify sprinter context (context should be from place where we want to insert method)
+        //val sprinterContext = compiler.doLocateContext(compiler.rangePos(srcFile, pos.offset, pos.offset, pos.offset + length))
         val tree = compiler.locateTree(new RangePosition(srcFile, start, start, start + length-1))
         val typer = compiler.analyzer.newTyper(context)
         val typedTree = typer.typed(tree)

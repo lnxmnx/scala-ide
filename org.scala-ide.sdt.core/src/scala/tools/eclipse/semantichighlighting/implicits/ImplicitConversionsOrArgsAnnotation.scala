@@ -19,6 +19,11 @@ class ImplicitConversionAnnotation(_sourceLink: () => Option[IHyperlink], text: 
 
 class ImplicitArgAnnotation(text: String) extends ImplicitAnnotation(text)
 
+class MacroExpansionAnnotation(text: String) extends Annotation(MacroExpansionAnnotation.ID, /*isPersistent*/ false, text)
+object MacroExpansionAnnotation {
+  final val ID = "scala.tools.eclipse.semantichighlighting.implicits.MacroExpansionAnnotation"
+}
+
 class ImpliticAnnotationTextStyleStrategy(var fontStyle: Int) extends AnnotationPainter.ITextStyleStrategy {
 
   // `applyTextStyle` is called by the AnnotatinPainter when the text is painted,
