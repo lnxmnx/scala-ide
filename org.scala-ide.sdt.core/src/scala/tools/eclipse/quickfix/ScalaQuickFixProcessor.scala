@@ -72,6 +72,7 @@ class ScalaQuickFixProcessor extends IQuickFixProcessor with HasLogger {
              val document = (editor.asInstanceOf[ITextEditor]).getDocumentProvider().getDocument(editor.getEditorInput())
              val typeMismatchFix = suggestTypeMismatchFix(document, ann.getText, pos)
 
+             //TODO - see createMethodFix
              val createMethodFix = suggestCreateMethodFix(context.getCompilationUnit(), ann.getText, pos)
              val changeMethodCase = suggestChangeMethodCase(context.getCompilationUnit(), ann.getText, pos)
 
