@@ -23,8 +23,9 @@ import scala.tools.eclipse.refactoring.EditorHelpers
 import scala.reflect.internal.util.RangePosition
 import scala.reflect.internal.util.SourceFile
 import scala.reflect.internal.util.NoPosition
+import scala.tools.refactoring.implementations.AddVariable
 
-object ImplAbstractMember {
+object ImplAbstractMembers {
   def suggestsFor(ssf: ScalaSourceFile, offset: Int): Array[IJavaCompletionProposal] = {
     implAbstractMember(ssf, offset).toArray
   }
@@ -34,13 +35,14 @@ object ImplAbstractMember {
       import compiler.{ Tree, ClassDef, ModuleDef, EmptyTree, TypeTree, Type, Symbol, Name }
 
       type NamedTree = Tree { val name: Name; val impl: Tree }
+      type TParameterList = List[String]
 
       class AbstractMemberProposal(abstrMember: Symbol, cl: NamedTree, target: AddMethodTarget) extends IJavaCompletionProposal {
-        private def initValOrDef: (ParameterList, ReturnType) = {
+        private def initValOrDef: (TParameterList, ParameterList, ReturnType, Boolean) = {
           //TODO find last printed method
           //TODO in scala-refactoring we can check with pos.isDefined
           def refactContextPos =
-            if (!Option(cl.impl).isEmpty && !cl.impl.isEmpty && !cl.impl.children.isEmpty && cl.impl.children.last.pos.isDefined)
+            if (!Option(cl.impl).isEmpty && !cl.impl.isEmpty && !cl.impl.children.isEmpty && cl.impl.children.last.pos.isDefined && cl.impl.children.last.pos.isRange)
               createPosition(sourceFile, cl.impl.children.last.pos.end)
             else createPosition(sourceFile, cl.pos.end)
 
@@ -67,12 +69,14 @@ object ImplAbstractMember {
           //val paramss: ParameterList = List(List(("x", "Float")))
           //val retType = Option("Double")
 
-          val tparams: List[String] = method.typeParams map (_.name.decode)
+          val tparams: TParameterList = method.typeParams map (_.name.decode)
           val retType: ReturnType = Option(processType(method.returnType.asSeenFrom(cl.symbol.tpe, method.owner)))
-          (paramss, retType)
+          //TODO fix isDef
+          val isDef = abstrMember.isMethod && !(abstrMember.isVal || abstrMember.isVar || abstrMember.isMutable || abstrMember.isVariable)
+          (tparams, paramss, retType, isDef)
         }
 
-        private val (parameters: ParameterList, returnType: ReturnType) = initValOrDef
+        private val (typeParameters: TParameterList, parameters: ParameterList, returnType: ReturnType, isDef: Boolean) = initValOrDef
 
         override def apply(document: IDocument): Unit = {
           for {
@@ -81,8 +85,13 @@ object ImplAbstractMember {
           } {
             val scu = ssf.getCompilationUnit.asInstanceOf[ScalaCompilationUnit]
             val changes = scu.withSourceFile { (srcFile, compiler) =>
-              val refactoring = new AddMethod { val global = compiler }
-              refactoring.addMethod(sourceFile.file, cl.name.decode, abstrMember.nameString, parameters, returnType, target) //if we're here, className should be defined because of the check in isApplicable
+              if (isDef) {
+                val refactoring = new AddMethod { val global = compiler }
+                refactoring.addMethod(sourceFile.file, cl.name.decode, abstrMember.nameString, parameters, returnType, target, typeParameters) //if we're here, className should be defined because of the check in isApplicable
+              } else {
+                val refactoring = new AddVariable { val global = compiler }
+                refactoring.addVariable(sourceFile.file, cl.name.decode, abstrMember.nameString, abstrMember.isMutable, returnType, target)
+              }
             } getOrElse Nil
 
             for (change <- changes) {
@@ -103,9 +112,11 @@ object ImplAbstractMember {
             parameterList.map(_._2).mkString(", ")
           }).mkString("(", ")(", ")")
 
+          val typeParametersList = if (!typeParameters.isEmpty) typeParameters.mkString("[",",","]") else ""
+
           val returnTypeStr = returnType.map(": " + _).getOrElse("")
 
-          val base = s"Implement method '${abstrMember.nameString}$prettyParameterList$returnTypeStr'"
+          val base = s"Implement ${if (isDef) "def" else "val"} '${abstrMember.nameString}$typeParametersList$prettyParameterList$returnTypeStr'"
           base
         }
 
