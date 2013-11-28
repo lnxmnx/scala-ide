@@ -62,7 +62,7 @@ object ImplAbstractMembers {
           val method = abstrMember.asMethod
           val paramss: ParameterList = method.paramss map {
             _.zipWithIndex.map { param =>
-              ((if (param._1.isImplicit && (param._2 == 0)) "implicit " else "") + param._1.name.decode, processType(param._1.tpe))
+              ((if (param._1.isImplicit && (param._2 == 0)) "implicit " else "") + param._1.name.decode, processType(param._1.tpe.asSeenFrom(cl.symbol.tpe, method.owner)))
             }
           }
 
