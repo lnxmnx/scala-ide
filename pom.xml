@@ -29,6 +29,7 @@
     <repo.ajdt.kepler>http://download.eclipse.org/tools/ajdt/43/update</repo.ajdt.kepler>
     <repo.equinox.launcher>http://www.chuusai.com/eclipse/equinox-weaving-launcher/</repo.equinox.launcher>
     <repo.scala-ide.root>http://download.scala-ide.org</repo.scala-ide.root>
+    <repo.scala-refactoring.local>file:///home/vova/scala-projects/GSoC/scala-ide/myrepo/scala-refactoring</repo.scala-refactoring.local>
 
     <!-- fixed versions -->
     <miglayout.version>3.7.4</miglayout.version>
@@ -89,7 +90,7 @@
         <scala.version>2.10.4-SNAPSHOT</scala.version>
         <version.suffix>2_10</version.suffix>
 
-        <repo.scala-refactoring>${repo.scala-ide.root}/scala-refactoring-210x</repo.scala-refactoring>
+        <repo.scala-refactoring>${repo.scala-refactoring.local}/org.scala-refactoring.update-site/target/site/</repo.scala-refactoring>
         <repo.scalariform>${repo.scala-ide.root}/scalariform-210x</repo.scalariform>
         <repo.typesafe>http://private-repo.typesafe.com/typesafe/ide-2.10</repo.typesafe>
       </properties>
