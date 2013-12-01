@@ -30,19 +30,20 @@ case class CreateMethodProposal(fullyQualifiedEnclosingType: Option[String], met
     compilationUnit.asInstanceOf[ScalaCompilationUnit].withSourceFile((srcFile, compiler) => {
       compiler.askOption(() => {
         val length = end - start
-        val context = compiler.doLocateContext(new RangePosition(srcFile, start, start, start + length-1))
-        //TODO modify sprinter context (context should be from place where we want to insert method)
-        //val sprinterContext = compiler.doLocateContext(compiler.rangePos(srcFile, pos.offset, pos.offset, pos.offset + length))
-        val tree = compiler.locateTree(new RangePosition(srcFile, start, start, start + length-1))
+        val position = new RangePosition(srcFile, start, start, start + length-1)
+        val context = compiler.doLocateContext(position)
+        val tree = compiler.locateTree(position)
         val typer = compiler.analyzer.newTyper(context)
         val typedTree = typer.typed(tree)
         val tpe = typedTree.tpe.resultType.underlying
         if (tpe.isError) None
         else if (tpe.toString == "Null") Some("AnyRef") //there must be a better condition
-        else {
-          val sprinterType = TypePrinters.showType(compiler, tpe, context)
+        else if (!targetIsOtherClass) {
+          //TODO modify sprinter context (context should be from place where we want to insert method)
+          val sprinterContext = Option(context.enclClass).getOrElse(context)
+          val sprinterType = TypePrinters.showType(compiler, tpe, sprinterContext)
           Some(sprinterType) //do we want tpe.isError? tpe.isErroneous?
-        }
+        } else Some(tpe.toString())
       }).flatten.getOrElse("Any")
     }) getOrElse ("Any")
   }

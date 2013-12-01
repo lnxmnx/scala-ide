@@ -204,7 +204,7 @@ object ImplicitHighlightingPresenter {
       val originalTree = macroExpansionAttachment.original
       val txt = new String(sourceFile.content, originalTree.pos.startOrPoint,
           math.max(0, originalTree.pos.endOrPoint - originalTree.pos.startOrPoint)).trim()
-      val sprinterTree = PrettyPrinters(compiler).show(t, PrettyPrinters.AFTER_NAMER, printMultiline = true)
+      val sprinterTree = PrettyPrinters(compiler).show(t, PrettyPrinters.AFTER_TYPER, printMultiline = true)
 //      val expandedStr = printTree(t)
 
       val annotation = new MacroExpansionAnnotation("Macro expansion found: " + txt + DisplayStringSeparator + sprinterTree)

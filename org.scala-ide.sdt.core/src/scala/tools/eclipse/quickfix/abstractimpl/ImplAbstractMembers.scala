@@ -72,7 +72,8 @@ object ImplAbstractMembers {
           val tparams: TParameterList = method.typeParams map (_.name.decode)
           val retType: ReturnType = Option(processType(method.returnType.asSeenFrom(cl.symbol.tpe, method.owner)))
           //TODO fix isDef
-          val isDef = abstrMember.isMethod && !(abstrMember.isVal || abstrMember.isVar || abstrMember.isMutable || abstrMember.isVariable)
+//          val isDef = abstrMember.isMethod && !(abstrMember.isVal || abstrMember.isVar || abstrMember.isMutable || abstrMember.isVariable)
+          val isDef = abstrMember.isMethod && !abstrMember.isAccessor
           (tparams, paramss, retType, isDef)
         }
 
@@ -90,7 +91,9 @@ object ImplAbstractMembers {
                 refactoring.addMethod(sourceFile.file, cl.name.decode, abstrMember.nameString, parameters, returnType, target, typeParameters) //if we're here, className should be defined because of the check in isApplicable
               } else {
                 val refactoring = new AddVariable { val global = compiler }
-                refactoring.addVariable(sourceFile.file, cl.name.decode, abstrMember.nameString, abstrMember.isMutable, returnType, target)
+//                val setter = abstrMember.setter(abstrMember.owner)
+//                val isVar = if (setter != compiler.NoSymbol) setter.isSetter else false
+                refactoring.addVariable(sourceFile.file, cl.name.decode, abstrMember.nameString, false, returnType, target)
               }
             } getOrElse Nil
 
@@ -131,7 +134,8 @@ object ImplAbstractMembers {
         compiler.askOption { () =>
           val tp = tree.symbol.tpe
           (tp.members filter { m =>
-            (m.isMethod || m.isValue) && m.isIncompleteIn(tree.symbol) && m.isDeferred && !m.isSetter && (m.owner != tree.symbol)
+//            (m.isMethod || m.isValue) && m.isIncompleteIn(tree.symbol) && m.isDeferred && !m.isSetter && (m.owner != tree.symbol)
+            m.isMethod && m.isIncompleteIn(tree.symbol) && m.isDeferred && !m.isSetter && (m.owner != tree.symbol)
           }
             map { sym =>
               new AbstractMemberProposal(sym, tree, AddToClosest(offset))
