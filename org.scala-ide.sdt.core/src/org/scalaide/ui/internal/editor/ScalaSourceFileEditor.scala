@@ -1,10 +1,8 @@
 package org.scalaide.ui.internal.editor
 
 import java.util.ResourceBundle
-
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.SynchronizedBuffer
-
 import org.eclipse.core.runtime.IProgressMonitor
 import org.eclipse.core.runtime.Status
 import org.eclipse.core.runtime.jobs.Job
@@ -60,11 +58,38 @@ import org.scalaide.util.internal.eclipse.EclipseUtils
 import org.scalaide.util.internal.eclipse.EditorUtils
 import org.scalaide.util.internal.eclipse.AnnotationUtils._
 import org.scalaide.util.internal.ui.DisplayThread
+import org.eclipse.jface.text.source.LineNumberRulerColumn
+import org.eclipse.swt.graphics.GC
+import org.eclipse.jface.text.source.ILineRange
+import org.eclipse.swt.widgets.Display
+import org.eclipse.jface.text.source.IVerticalRulerColumn
+import org.eclipse.jface.text.source.LineNumberChangeRulerColumn
+import org.eclipse.jface.text.source.IChangeRulerColumn
+import org.eclipse.jface.text.source.ISharedTextColors
+import org.eclipse.jface.text.source.LineNumberChangeRulerColumnWithMacro
 
+class LineNumberChangeRulerColumnWithMacro(sharedColors: ISharedTextColors)
+extends LineNumberChangeRulerColumn(sharedColors){
+  override def createDisplayString(line: Int): String = {
+    if(line == 19) "19"
+    else if(line == 20) "19"
+    else if(line == 21) "19"
+    else if(line == 22) "19"
+    else (line+1).toString 
+  }
+}
 
 class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor { self =>
   import ScalaSourceFileEditor._
-
+  
+  override protected def createLineNumberRulerColumn(): IVerticalRulerColumn = {
+    val t = new LineNumberChangeRulerColumnWithMacro(getSharedColors)
+    t.asInstanceOf[IChangeRulerColumn].setHover(createChangeHover)
+    initializeLineNumberRulerColumn(t)
+    t
+  }
+  
+  
   private var occurrenceAnnotations: Set[Annotation] = Set()
   private var occurrencesFinder: ScalaOccurrencesFinder = _
   private var occurencesFinderInstalled = false
