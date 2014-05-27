@@ -64,7 +64,7 @@ import org.eclipse.ui.texteditor.IUpdate
 import org.eclipse.ui.texteditor.TextOperationAction
 
 
-class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor { self =>
+class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor with ScalaMacroEditor { self =>
   import ScalaSourceFileEditor._
 
   private var occurrenceAnnotations: Set[Annotation] = Set()

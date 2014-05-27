@@ -29,7 +29,7 @@
     <repo.ajdt.kepler>http://download.eclipse.org/tools/ajdt/43/update</repo.ajdt.kepler>
     <repo.equinox.launcher>http://www.chuusai.com/eclipse/equinox-weaving-launcher/</repo.equinox.launcher>
     <repo.scala-ide.root>http://download.scala-ide.org</repo.scala-ide.root>
-    <repo.scala-refactoring.local>file:///home/vova/scala-projects/sprinter-test-build/scala-refactoring</repo.scala-refactoring.local>
+    <repo.scala-refactoring.local>file:///home/nikiforo/scala-ide-macros/scala-refactoring</repo.scala-refactoring.local>
 
     <!-- fixed versions -->
     <miglayout.version>3.7.4</miglayout.version>
