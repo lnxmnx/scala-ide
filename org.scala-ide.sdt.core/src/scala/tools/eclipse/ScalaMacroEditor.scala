@@ -8,6 +8,13 @@ import org.eclipse.jdt.internal.ui.JavaPlugin
 import scala.tools.eclipse.javaelements.ScalaCompilationUnit
 import org.eclipse.jface.text.Position
 import org.eclipse.core.runtime.IProgressMonitor
+import org.eclipse.core.resources.IResource
+import org.eclipse.core.resources.IMarker
+import org.eclipse.ui.part.FileEditorInput
+import org.eclipse.jface.text.source.IAnnotationModel
+import collection.JavaConversions._
+import org.eclipse.jface.text.source.Annotation
+import org.eclipse.ui.texteditor.MarkerAnnotation
 
 object myLog { //TODO: remove
   import java.io.PrintWriter
@@ -30,24 +37,25 @@ object SuperCompiler { //TODO: remove
 }
 
 trait ScalaMacroEditor extends CompilationUnitEditor {
+      //TODO: out of sync(press F5) doesn't work
   private var macroEpansions: List[Position] = Nil
-  private var iEditor: Option[IEditorInput] = None
-  private def document: Option[IDocument] = iEditor.map(getDocumentProvider.getDocument(_))
-  
-//private def document: Option[IDocument] = Option(getDocumentProvider.getDocument(iEditor)) Why this compiles?  
-//  private var document: Option[IDocument] = None
+  private var iEditorOpt: Option[IEditorInput] = None
+  private def documentOpt: Option[IDocument] = iEditorOpt.map(getDocumentProvider.getDocument(_))
+  private def annotationModelOpt: Option[IAnnotationModel] = iEditorOpt.map(getDocumentProvider.getAnnotationModel(_))
+
+  //private def document: Option[IDocument] = Option(getDocumentProvider.getDocument(iEditorOpt)) Why this compiles?
 
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
     removeMacroExpansions
     super.performSave(overwrite, progressMonitor)
-    expandMacros(iEditor)
+    expandMacros(iEditorOpt)
     myLog.log("performSave")
   }
 
   override def doSetInput(iEditorInput: IEditorInput) {
-    iEditor = Option(iEditorInput)
+    iEditorOpt = Option(iEditorInput)
     super.doSetInput(iEditorInput)
-    expandMacros(iEditor)
+    expandMacros(iEditorOpt)
   }
 
   private def expandMacros(iEditor: Option[IEditorInput]) {
@@ -86,7 +94,7 @@ trait ScalaMacroEditor extends CompilationUnitEditor {
         }.traverse(compiler.loadedType(sourceFile).fold(identity, _ => compiler.EmptyTree))
 
         for {
-          doc <- document
+          doc <- documentOpt
           position <- macroExpandeePositions
         } {
           val lineNumForMacroExpansion = doc.getLineOfOffset(position.getOffset) + 1
@@ -94,21 +102,34 @@ trait ScalaMacroEditor extends CompilationUnitEditor {
           val macroExpansion = SuperCompiler.showCode
           doc.replace(offsetForMacroExpansion, 0, macroExpansion)
 
-          //somehow mark macro expansion lines
-          macroEpansions = new Position(offsetForMacroExpansion, macroExpansion.length) :: macroEpansions
+          //Mark macro expansion lines
+          val marker = editorInput.asInstanceOf[FileEditorInput].getFile.createMarker("scala.tools.eclipse.macroMarkerId")
+          val end = offsetForMacroExpansion + macroExpansion.length //TODO: remove
+          marker.setAttribute(IMarker.CHAR_START, offsetForMacroExpansion)
+          marker.setAttribute(IMarker.CHAR_END, offsetForMacroExpansion + macroExpansion.length)
         }
-
-        //TODO: Add markers
       }
     }
   }
-  
+
   private def removeMacroExpansions {
+    val annotationsOpt = annotationModelOpt.map(_.getAnnotationIterator)
     for {
-      doc <- document
-      expansion <- macroEpansions
+      doc <- documentOpt
+      annotationModel <- annotationModelOpt
+      annotations <- annotationsOpt
+      annotationNoType <- annotations
     } {
-      doc.replace(expansion.offset, expansion.length, "")
+      val annotation = annotationNoType.asInstanceOf[Annotation]
+      val tpe = annotation.getType
+      if (annotation.getType == "scala.tools.eclipse.macroMarkerId") {
+        val pos = annotationModel.getPosition(annotation)
+        
+        val marker = annotation.asInstanceOf[MarkerAnnotation].getMarker
+        marker.delete
+        
+        doc.replace(pos.offset, pos.length, "")
+      }
     }
   }
 }
