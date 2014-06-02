@@ -15,6 +15,9 @@ import org.eclipse.jface.text.source.IAnnotationModel
 import collection.JavaConversions._
 import org.eclipse.jface.text.source.Annotation
 import org.eclipse.ui.texteditor.MarkerAnnotation
+import org.eclipse.jdt.ui.text.folding.DefaultJavaFoldingStructureProvider
+import org.eclipse.jdt.ui.text.folding.IJavaFoldingStructureProvider
+import org.eclipse.ui.texteditor.AbstractDecoratedTextEditor
 
 object myLog { //TODO: remove
   import java.io.PrintWriter
@@ -36,12 +39,77 @@ object SuperCompiler { //TODO: remove
 					 |""".stripMargin
 }
 
-trait ScalaMacroEditor extends CompilationUnitEditor {
-      //TODO: out of sync(press F5) doesn't work
-  private var macroEpansions: List[Position] = Nil
-  private var iEditorOpt: Option[IEditorInput] = None
-  private def documentOpt: Option[IDocument] = iEditorOpt.map(getDocumentProvider.getDocument(_))
-  private def annotationModelOpt: Option[IAnnotationModel] = iEditorOpt.map(getDocumentProvider.getAnnotationModel(_))
+//https://issues.scala-lang.org/browse/SI-7946
+//class MacroFoldingStructureProvider extends DefaultJavaFoldingStructureProvider {
+//  import org.eclipse.jdt.core.IJavaElement
+//  import org.eclipse.jdt.ui.text.folding.DefaultJavaFoldingStructureProvider.FoldingStructureComputationContext
+//  myLog.log("computeFoldingStructure")
+//    override protected def computeFoldingStructure(element: IJavaElement, ctx: FoldingStructureComputationContext) {
+//      myLog.log("computeFoldingStructure")
+//      super.computeFoldingStructure(element, ctx)
+//    }
+//}
+
+trait ScalaMacroLineNumbers { self: ScalaMacroEditor => 
+  import org.eclipse.jface.text.source.LineNumberChangeRulerColumn
+  import org.eclipse.jface.text.source.ISharedTextColors
+
+  class MyRange(val start: Int, val end: Int) {}
+
+  var macroExpansionLines: List[MyRange] = Nil
+  
+  class LineNumberChangeRulerColumnWithMacro(sharedColors: ISharedTextColors)
+    extends LineNumberChangeRulerColumn(sharedColors) {
+    override def createDisplayString(line: Int): String = {
+      getMacroExpansionLines      
+      macroExpansionLines.flatMap(range =>
+        if (range.start <= line && line < range.end) {
+          Some(range.start - 1)
+        } else None).reduceOption(_ min _).getOrElse(line).toString
+//        (line - macroExpansionLines.flatMap(range =>
+//        	Math.min(range.end,line) - range.start + 1
+//        ).sum).toString
+    }
+  }
+  
+  def getCurrentMacroPositions = {
+    val annotationsOpt = annotationModelOpt.map(_.getAnnotationIterator)
+
+    var t: List[Position] = Nil
+    for {
+      doc <- documentOpt
+      annotationModel <- annotationModelOpt
+      annotations <- annotationsOpt
+      annotationNoType <- annotations
+    } {
+      val annotation = annotationNoType.asInstanceOf[Annotation]
+      if (annotation.getType == "scala.tools.eclipse.macroMarkerId") {
+        t = annotationModel.getPosition(annotation) :: t
+      }
+    }
+    t
+  }
+  
+  def getMacroExpansionLines(){
+    val currentMacroPositions = getCurrentMacroPositions
+    macroExpansionLines = 
+      for{
+        currentMacroPosition <- currentMacroPositions
+        doc <- documentOpt      	
+      	} yield new MyRange(
+        doc.getLineOfOffset(currentMacroPosition.offset), 
+        doc.getLineOfOffset(currentMacroPosition.offset + currentMacroPosition.length)
+    )
+  }
+}
+
+trait ScalaMacroEditor extends CompilationUnitEditor with ScalaMacroLineNumbers {
+  //TODO: out of sync(press F5) doesn't work
+  //TODO: maybe add listener to macroApplication's change? If changed replace macro expansion
+  //TODO: macroexpansions do not change untill save command triggered
+  protected var iEditorOpt: Option[IEditorInput] = None
+  protected def documentOpt: Option[IDocument] = iEditorOpt.map(getDocumentProvider.getDocument(_))
+  protected def annotationModelOpt: Option[IAnnotationModel] = iEditorOpt.map(getDocumentProvider.getAnnotationModel(_))
 
   //private def document: Option[IDocument] = Option(getDocumentProvider.getDocument(iEditorOpt)) Why this compiles?
 
@@ -49,7 +117,6 @@ trait ScalaMacroEditor extends CompilationUnitEditor {
     removeMacroExpansions
     super.performSave(overwrite, progressMonitor)
     expandMacros(iEditorOpt)
-    myLog.log("performSave")
   }
 
   override def doSetInput(iEditorInput: IEditorInput) {
@@ -113,21 +180,20 @@ trait ScalaMacroEditor extends CompilationUnitEditor {
   }
 
   private def removeMacroExpansions {
-    val annotationsOpt = annotationModelOpt.map(_.getAnnotationIterator)
+    val annotations = annotationModelOpt.map(_.getAnnotationIterator)
     for {
       doc <- documentOpt
       annotationModel <- annotationModelOpt
-      annotations <- annotationsOpt
+      annotations <- annotations
       annotationNoType <- annotations
     } {
       val annotation = annotationNoType.asInstanceOf[Annotation]
-      val tpe = annotation.getType
       if (annotation.getType == "scala.tools.eclipse.macroMarkerId") {
         val pos = annotationModel.getPosition(annotation)
-        
+
         val marker = annotation.asInstanceOf[MarkerAnnotation].getMarker
         marker.delete
-        
+
         doc.replace(pos.offset, pos.length, "")
       }
     }

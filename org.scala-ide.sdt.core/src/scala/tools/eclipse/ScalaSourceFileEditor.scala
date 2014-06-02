@@ -66,7 +66,17 @@ import org.eclipse.ui.texteditor.TextOperationAction
 
 class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor with ScalaMacroEditor { self =>
   import ScalaSourceFileEditor._
-
+  
+  //TODO: move to trait ScalaMacroLineNumbers if possible
+  import org.eclipse.jface.text.source.IVerticalRulerColumn
+  import org.eclipse.jface.text.source.IChangeRulerColumn
+  override protected def createLineNumberRulerColumn(): IVerticalRulerColumn = {
+    val verticalRuler = new LineNumberChangeRulerColumnWithMacro(getSharedColors)
+    verticalRuler.asInstanceOf[IChangeRulerColumn].setHover(createChangeHover)
+    initializeLineNumberRulerColumn(verticalRuler)
+    verticalRuler
+  }
+  
   private var occurrenceAnnotations: Set[Annotation] = Set()
   private var occurrencesFinder: ScalaOccurrencesFinder = _
   private var occurencesFinderInstalled = false
