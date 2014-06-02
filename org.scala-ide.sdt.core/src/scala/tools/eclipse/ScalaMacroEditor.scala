@@ -39,17 +39,6 @@ object SuperCompiler { //TODO: remove
 					 |""".stripMargin
 }
 
-//https://issues.scala-lang.org/browse/SI-7946
-//class MacroFoldingStructureProvider extends DefaultJavaFoldingStructureProvider {
-//  import org.eclipse.jdt.core.IJavaElement
-//  import org.eclipse.jdt.ui.text.folding.DefaultJavaFoldingStructureProvider.FoldingStructureComputationContext
-//  myLog.log("computeFoldingStructure")
-//    override protected def computeFoldingStructure(element: IJavaElement, ctx: FoldingStructureComputationContext) {
-//      myLog.log("computeFoldingStructure")
-//      super.computeFoldingStructure(element, ctx)
-//    }
-//}
-
 trait ScalaMacroLineNumbers { self: ScalaMacroEditor => 
   import org.eclipse.jface.text.source.LineNumberChangeRulerColumn
   import org.eclipse.jface.text.source.ISharedTextColors
@@ -66,19 +55,16 @@ trait ScalaMacroLineNumbers { self: ScalaMacroEditor =>
         if (range.start <= line && line < range.end) {
           Some(range.start - 1)
         } else None).reduceOption(_ min _).getOrElse(line).toString
-//        (line - macroExpansionLines.flatMap(range =>
-//        	Math.min(range.end,line) - range.start + 1
-//        ).sum).toString
     }
   }
   
   def getCurrentMacroPositions = {
-    val annotationsOpt = annotationModelOpt.map(_.getAnnotationIterator)
+    val annotationsOpt = annotationModel.map(_.getAnnotationIterator)
 
     var t: List[Position] = Nil
     for {
-      doc <- documentOpt
-      annotationModel <- annotationModelOpt
+      doc <- document
+      annotationModel <- annotationModel
       annotations <- annotationsOpt
       annotationNoType <- annotations
     } {
@@ -95,7 +81,7 @@ trait ScalaMacroLineNumbers { self: ScalaMacroEditor =>
     macroExpansionLines = 
       for{
         currentMacroPosition <- currentMacroPositions
-        doc <- documentOpt      	
+        doc <- document      	
       	} yield new MyRange(
         doc.getLineOfOffset(currentMacroPosition.offset), 
         doc.getLineOfOffset(currentMacroPosition.offset + currentMacroPosition.length)
@@ -107,22 +93,22 @@ trait ScalaMacroEditor extends CompilationUnitEditor with ScalaMacroLineNumbers 
   //TODO: out of sync(press F5) doesn't work
   //TODO: maybe add listener to macroApplication's change? If changed replace macro expansion
   //TODO: macroexpansions do not change untill save command triggered
-  protected var iEditorOpt: Option[IEditorInput] = None
-  protected def documentOpt: Option[IDocument] = iEditorOpt.map(getDocumentProvider.getDocument(_))
-  protected def annotationModelOpt: Option[IAnnotationModel] = iEditorOpt.map(getDocumentProvider.getAnnotationModel(_))
+  protected var iEditor: Option[IEditorInput] = None
+  protected def document: Option[IDocument] = iEditor.map(getDocumentProvider.getDocument(_))
+  protected def annotationModel: Option[IAnnotationModel] = iEditor.map(getDocumentProvider.getAnnotationModel(_))
 
   //private def document: Option[IDocument] = Option(getDocumentProvider.getDocument(iEditorOpt)) Why this compiles?
 
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
     removeMacroExpansions
     super.performSave(overwrite, progressMonitor)
-    expandMacros(iEditorOpt)
+    expandMacros(iEditor)
   }
 
   override def doSetInput(iEditorInput: IEditorInput) {
-    iEditorOpt = Option(iEditorInput)
+    iEditor = Option(iEditorInput)
     super.doSetInput(iEditorInput)
-    expandMacros(iEditorOpt)
+    expandMacros(iEditor)
   }
 
   private def expandMacros(iEditor: Option[IEditorInput]) {
@@ -161,7 +147,7 @@ trait ScalaMacroEditor extends CompilationUnitEditor with ScalaMacroLineNumbers 
         }.traverse(compiler.loadedType(sourceFile).fold(identity, _ => compiler.EmptyTree))
 
         for {
-          doc <- documentOpt
+          doc <- document
           position <- macroExpandeePositions
         } {
           val lineNumForMacroExpansion = doc.getLineOfOffset(position.getOffset) + 1
@@ -180,10 +166,10 @@ trait ScalaMacroEditor extends CompilationUnitEditor with ScalaMacroLineNumbers 
   }
 
   private def removeMacroExpansions {
-    val annotations = annotationModelOpt.map(_.getAnnotationIterator)
+    val annotations = annotationModel.map(_.getAnnotationIterator)
     for {
-      doc <- documentOpt
-      annotationModel <- annotationModelOpt
+      doc <- document
+      annotationModel <- annotationModel
       annotations <- annotations
       annotationNoType <- annotations
     } {

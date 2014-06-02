@@ -1565,13 +1565,4 @@
  		 verticalRulerPreferenceValue="true">        
    </specification>
 </extension>
-  <extension
-        point="org.eclipse.jdt.ui.foldingStructureProviders">
-     <provider
-     	   id="org.eclipse.jdt.ui.foldingStructureProviders"
-     	   name="Macro folding provider"
-           class="scala.tools.eclipse.MacroFoldingStructureProvider">
-     </provider>
-  </extension>
-
 </plugin>
