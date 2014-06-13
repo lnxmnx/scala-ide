@@ -89,23 +89,29 @@ object ImplicitHighlightingPresenter {
     }
 
     def mkMacroExpansionAnnotation(t: Tree) = {
-      val Some(macroExpansionAttachment) = t.attachments.get[compiler.analyzer.MacroExpansionAttachment]
-      val originalMacroPos = macroExpansionAttachment.expandee.pos
-      if (macroExpansionAttachment.expandee.symbol.fullName == "scala.reflect.materializeClassTag") None
-      else{
-        val annotation = new MacroExpansionAnnotation(compiler.showCode(macroExpansionAttachment.expanded.asInstanceOf[Tree]))
-        val pos = new Position(originalMacroPos.start,originalMacroPos.end - originalMacroPos.start)
+      val Some(att) = t.attachments.get[java.util.HashMap[String, Any]]
+      val expandeeTree = att.get("expandeeTree").asInstanceOf[Tree]
+      val expansionString = att.get("expansionString").asInstanceOf[String]
+      val originalMacroPos = expandeeTree.pos
+      if (expandeeTree.symbol.fullName == "scala.reflect.materializeClassTag") None
+      else {
+        val annotation = new MacroExpansionAnnotation(expansionString)
+        val pos = new Position(originalMacroPos.start, originalMacroPos.end - originalMacroPos.start)
         Some(annotation, pos)
       }
     }
-
 
     var implicits = Map[Annotation, Position]()
     var macroExpansions = Map[Annotation, Position]()
 
     new Traverser {
       override def traverse(t: Tree): Unit = {
-        if (t.attachments.get[compiler.analyzer.MacroExpansionAttachment].isDefined)
+//        if (t.attachments.get[compiler.analyzer.MacroExpansionAttachment].isDefined)
+//          mkMacroExpansionAnnotation(t).map(macroExpansionAnnotation => {
+//            val (annotation, pos) = macroExpansionAnnotation
+//            macroExpansions += (annotation -> pos)
+//          })
+        if (t.attachments.get[java.util.HashMap[String, Any]].isDefined)
           mkMacroExpansionAnnotation(t).map(macroExpansionAnnotation => {
             val (annotation, pos) = macroExpansionAnnotation
             macroExpansions += (annotation -> pos)
