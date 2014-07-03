@@ -59,13 +59,80 @@ import org.scalaide.util.internal.eclipse.EditorUtils
 import org.scalaide.util.internal.eclipse.AnnotationUtils._
 import org.scalaide.util.internal.ui.DisplayThread
 import org.eclipse.ui.IEditorInput
+import org.eclipse.jface.text.source.IVerticalRulerColumn
+import org.eclipse.jface.text.source.IChangeRulerColumn
+import org.eclipse.swt.widgets.Composite
+import org.eclipse.jface.text.source.IVerticalRuler
+import org.eclipse.jface.text.source.IOverviewRuler
+import org.eclipse.jface.preference.IPreferenceStore
+import ScalaSourceFileEditor._
+import org.eclipse.jdt.internal.ui.javaeditor.JavaSourceViewer
+import org.eclipse.jface.text.projection.ProjectionDocumentManager
+import org.eclipse.jface.text.projection.ProjectionDocument
+import org.eclipse.jface.text.projection.ProjectionDocumentEvent
+import org.eclipse.jface.text.DocumentEvent
 
+class MacroProjectionDocumentManager extends ProjectionDocumentManager {
+  override def createProjectionDocument(master: IDocument) = {
+    new MacroProjectionDocument(master)
+  }
+}
+
+class MacroProjectionDocument(master: IDocument) extends ProjectionDocument(master) {
+  import org.eclipse.jface.text.Document
+  var macros: List[Document] = Nil
+  def addMacro {
+    val documentThatContainsMacro = new Document
+    documentThatContainsMacro.set("""Macros.add(12345,54321)
+                                    |A new line for check""".stripMargin)
+  }
+
+  override def addMasterDocumentRange(offsetInMaster: Int, lengthInMaster: Int) {
+    super.addMasterDocumentRange(offsetInMaster, lengthInMaster)
+  }
+
+  override def removeMasterDocumentRange(offsetInMaster: Int, lengthInMaster: Int) {
+    super.removeMasterDocumentRange(offsetInMaster, lengthInMaster)
+    //    val event = new ProjectionDocumentEvent(this, 0, 9, "\nabcdefg\n", 0, 0)
+    //    super.fireDocumentAboutToBeChanged(event)
+    //    getTracker().replace(0, 0, "Macros.add(12345,54321)")
+    //    super.fireDocumentChanged(event)
+  }
+
+  def getMacroFragments = {
+
+  }
+
+//  override def get(offset: Int, length: Int) = {
+//    val t = getDocumentManagedPositions
+//    val t2 = getFragments
+//    if (offset == 168 && length == 24) """Macros.add(12345,54321) """
+////                                         |A new line for check""".stripMargin
+//    else super.get(offset, length)
+//  }
+
+  def myReplace(offset: Int, length: Int, text: String) {
+    val e = new DocumentEvent(this, offset, length, text)
+    fireDocumentAboutToBeChanged(e)
+
+    val store = getStore
+    getStore().replace(offset, length, text);
+    getTracker().replace(offset, length, text);
+
+    fireDocumentChanged(e);
+  }
+}
+
+class MacroSourceViewer(parent: Composite, verticalRuler: IVerticalRuler, overviewRuler: IOverviewRuler, showAnnotationsOverview: Boolean, styles: Int, store: IPreferenceStore)
+  extends JavaSourceViewer(parent, verticalRuler, overviewRuler, showAnnotationsOverview, styles, store) {
+  override def createSlaveDocumentManager() = {
+    new MacroProjectionDocumentManager
+  }
+  override def getVisibleDocument = super.getVisibleDocument
+}
 
 class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor with ScalaMacroEditor with ScalaLineNumberMacroEditor { self =>
-  import ScalaSourceFileEditor._
 
-  import org.eclipse.jface.text.source.IVerticalRulerColumn
-  import org.eclipse.jface.text.source.IChangeRulerColumn
   override protected def createLineNumberRulerColumn(): IVerticalRulerColumn = {
     val verticalRuler = new LineNumberChangeRulerColumnWithMacro(getSharedColors)
     verticalRuler.asInstanceOf[IChangeRulerColumn].setHover(createChangeHover)
@@ -73,10 +140,14 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
     verticalRuler
   }
 
+  override protected def createJavaSourceViewer(parent: Composite, verticalRuler: IVerticalRuler, overviewRuler: IOverviewRuler, isOverviewRulerVisible: Boolean, styles: Int, store: IPreferenceStore) = {
+    new MacroSourceViewer(parent, verticalRuler, overviewRuler, isOverviewRulerVisible, styles, store) //FIXME: see super.createJavaSourceViewer(params...)
+  }
+
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
     removeMacroExpansions()
     super.performSave(overwrite, progressMonitor)
-//    annotationModel.addAnnotationModelListener(macroAnnotationModelListener)
+    //    annotationModel.addAnnotationModelListener(macroAnnotationModelListener)
     expandMacros()
   }
 
@@ -157,7 +228,8 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
     requireOccurrencesUpdate(selection)
   }
 
-  /** Returns the annotation model of the current document provider.
+  /**
+   * Returns the annotation model of the current document provider.
    */
   private def getAnnotationModelOpt: Option[IAnnotationModel] = {
     for {
@@ -168,7 +240,7 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
 
   private def performOccurrencesUpdate(selection: ITextSelection, documentLastModified: Long) {
     val annotations = getAnnotations(selection, documentLastModified)
-    for(annotationModel <- getAnnotationModelOpt) annotationModel.withLock {
+    for (annotationModel <- getAnnotationModelOpt) annotationModel.withLock {
       annotationModel.replaceAnnotations(occurrenceAnnotations, annotations)
       occurrenceAnnotations = annotations.keySet
     }
@@ -233,7 +305,8 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
     removeScalaOccurrenceAnnotations()
   }
 
-  /** Clear the existing Mark Occurrences annotations.
+  /**
+   * Clear the existing Mark Occurrences annotations.
    */
   def removeScalaOccurrenceAnnotations() {
     for (annotationModel <- getAnnotationModelOpt) annotationModel.withLock {

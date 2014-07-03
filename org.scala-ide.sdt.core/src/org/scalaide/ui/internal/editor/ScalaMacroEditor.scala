@@ -19,21 +19,23 @@ trait ScalaMacroEditor { self: ScalaSourceFileEditor =>
   var macroExpansionRegions: List[MyRange] = Nil
   val macroAnnotationModelListener = new MacroAnnotationsModelListener
 
+  //  def visibleDocument = getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument
   def editorInput = getEditorInput
-  def document = getDocumentProvider.getDocument(editorInput)
+  def document = getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument.asInstanceOf[MacroProjectionDocument] //getDocumentProvider.getDocument(editorInput)
   def annotationModel = getDocumentProvider.getAnnotationModel(editorInput)
 
-  def expandMacros(){
+  def expandMacros() {
     val annotations = annotationModel.getAnnotationIterator.toList
-    for{
+    for {
       annotationNoType <- annotations
       annotation = annotationNoType.asInstanceOf[Annotation]
       if annotation.getType == Marker2Expand.ID
-    }{
+    } {
+      val visibleDocument = document
       val marker = annotationNoType.asInstanceOf[MarkerAnnotation].getMarker
       val pos = annotationModel.getPosition(annotation)
       val macroExpandee = document.get(pos.offset, pos.length)
-      val macroExpansion = marker.getAttribute("macroExpansion") .asInstanceOf[String]
+      val macroExpansion = marker.getAttribute("macroExpansion").asInstanceOf[String]
 
       marker.delete
       annotationModel.removeAnnotation(annotation)
@@ -48,11 +50,12 @@ trait ScalaMacroEditor { self: ScalaSourceFileEditor =>
 
       refreshMacroExpansionRegions()
     }
+    document.myReplace(168, 24, "Macros.add(1,5)         ")
   }
 
-  def refreshMacroExpansionRegions(){
+  def refreshMacroExpansionRegions() {
     val annotations = annotationModel.getAnnotationIterator.toList
-    macroExpansionRegions = for{
+    macroExpansionRegions = for {
       annotationNoType <- annotations
       annotation = annotationNoType.asInstanceOf[Annotation]
       if annotation.getType == ScalaMacroMarker.ID
@@ -95,7 +98,7 @@ trait ScalaMacroEditor { self: ScalaSourceFileEditor =>
         if annotation.getType == Marker2Expand.ID
       } yield annotation
 
-      if(expandAnnotations.isEmpty){
+      if (expandAnnotations.isEmpty) {
         model.removeAnnotationModelListener(this)
         return
       }
