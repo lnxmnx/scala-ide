@@ -21,7 +21,7 @@ trait ScalaMacroEditor { self: ScalaSourceFileEditor =>
 
   //  def visibleDocument = getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument
   def editorInput = getEditorInput
-  def document = getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument.asInstanceOf[MacroProjectionDocument] //getDocumentProvider.getDocument(editorInput)
+  def document = getDocumentProvider.getDocument(editorInput) //getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument.asInstanceOf[MacroProjectionDocument] //getDocumentProvider.getDocument(editorInput)
   def annotationModel = getDocumentProvider.getAnnotationModel(editorInput)
 
   def expandMacros() {
@@ -50,7 +50,6 @@ trait ScalaMacroEditor { self: ScalaSourceFileEditor =>
 
       refreshMacroExpansionRegions()
     }
-    document.myReplace(168, 24, "Macros.add(1,5)         ")
   }
 
   def refreshMacroExpansionRegions() {

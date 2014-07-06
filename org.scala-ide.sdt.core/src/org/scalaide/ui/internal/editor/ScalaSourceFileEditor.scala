@@ -71,6 +71,9 @@ import org.eclipse.jface.text.projection.ProjectionDocumentManager
 import org.eclipse.jface.text.projection.ProjectionDocument
 import org.eclipse.jface.text.projection.ProjectionDocumentEvent
 import org.eclipse.jface.text.DocumentEvent
+import org.eclipse.jface.text.ITextStore
+import org.eclipse.jface.text.Region
+import org.eclipse.jface.text.ILineTracker
 
 class MacroProjectionDocumentManager extends ProjectionDocumentManager {
   override def createProjectionDocument(master: IDocument) = {
@@ -78,49 +81,93 @@ class MacroProjectionDocumentManager extends ProjectionDocumentManager {
   }
 }
 
+class MacroTextStore(private val master: ITextStore) extends ITextStore {
+  //  private var macroRegions: List[Position]
+  val m = new { val offset = 28; val length = 4; val text = "|AAA|"; def collision = text.length - length }
+  def get(offset: Int) = master.get(offset)
+  //  def get(offset: Int, length: Int) = master.get(offset, length)
+  override def get(offset: Int, length: Int) = {
+    if (offset + length < m.offset) master.get(offset, length)
+    else if (m.offset + m.length < offset + length) {
+      val mas = master.get(offset, length - m.collision)
+
+      mas.take(m.offset - offset) + m.text + mas.drop(m.offset - offset + m.length)
+    } else master.get(offset - m.collision, length - m.collision)
+  }
+
+  //  def getLength = master.getLength
+  override def getLength() = {
+    master.getLength + m.collision
+  }
+  def replace(offset: Int, length: Int, text: String) = master.replace(offset, length, text)
+  def set(text: String) = master.set(text)
+}
+
+class MacroLineTracker(val master: ILineTracker) extends ILineTracker {
+  val m = new { val offset = 28; val length = 4; val text = "|AAA|"; def collision = text.length - length }
+
+  def computeNumberOfLines(text: String): Int = master.computeNumberOfLines(text)
+  def getLegalLineDelimiters(): Array[String] = master.getLegalLineDelimiters()
+  def getLineDelimiter(line: Int): String = master.getLineDelimiter(line)
+  def getLineInformation(line: Int): org.eclipse.jface.text.IRegion = {
+    val mas = master.getLineInformation(line)
+
+    //    val collision = m.text.length - m.length
+    if (mas.getOffset + mas.getLength < m.offset) mas
+    else if (mas.getOffset + mas.getLength < m.offset + m.length)
+      new Region(mas.getOffset, mas.getLength + m.collision)
+    else new Region(mas.getOffset + m.collision, mas.getLength + m.collision)
+    //    mas
+  }
+
+  def getLineInformationOfOffset(offset: Int): org.eclipse.jface.text.IRegion = master.getLineInformationOfOffset(offset)
+  def getLineLength(line: Int): Int = master.getLineLength(line)
+  def getLineNumberOfOffset(offset: Int): Int = master.getLineNumberOfOffset(offset)
+  def getLineOffset(line: Int): Int = master.getLineOffset(line)
+  def getNumberOfLines(): Int = master.getNumberOfLines()
+  def getNumberOfLines(offset: Int, length: Int): Int = master.getNumberOfLines(offset, length)
+  def replace(offset: Int, length: Int, text: String): Unit = master.replace(offset, length, text)
+  def set(text: String): Unit = master.set(text)
+}
+
 class MacroProjectionDocument(master: IDocument) extends ProjectionDocument(master) {
   import org.eclipse.jface.text.Document
-  var macros: List[Document] = Nil
-  def addMacro {
-    val documentThatContainsMacro = new Document
-    documentThatContainsMacro.set("""Macros.add(12345,54321)
-                                    |A new line for check""".stripMargin)
+
+  //  def macroReplace(offset: Int, length: Int, text: String) {
+  //    val e = new DocumentEvent(this, offset, length, text)
+  //    fireDocumentAboutToBeChanged(e)
+  //
+  //    val store = getStore
+  //    getStore().replace(offset, length, text);
+  //    getTracker().replace(offset, length, text);
+  //
+  //    fireDocumentChanged(e);
+  //  }
+
+  override def setTextStore(store: ITextStore) {
+    super.setTextStore(new MacroTextStore(store))
   }
 
-  override def addMasterDocumentRange(offsetInMaster: Int, lengthInMaster: Int) {
-    super.addMasterDocumentRange(offsetInMaster, lengthInMaster)
+  override def setLineTracker(tracker: ILineTracker) {
+    super.setLineTracker(new MacroLineTracker(tracker))
   }
 
-  override def removeMasterDocumentRange(offsetInMaster: Int, lengthInMaster: Int) {
-    super.removeMasterDocumentRange(offsetInMaster, lengthInMaster)
-    //    val event = new ProjectionDocumentEvent(this, 0, 9, "\nabcdefg\n", 0, 0)
-    //    super.fireDocumentAboutToBeChanged(event)
-    //    getTracker().replace(0, 0, "Macros.add(12345,54321)")
-    //    super.fireDocumentChanged(event)
-  }
+  //  val m = new { val offset = 28; val length = 4; val text = "|AAA|" }
 
-  def getMacroFragments = {
+  //  override def getLineInformation(line: Int) = {
+  //    val lineInfo = super.getLineInformation(line)
 
-  }
-
-//  override def get(offset: Int, length: Int) = {
-//    val t = getDocumentManagedPositions
-//    val t2 = getFragments
-//    if (offset == 168 && length == 24) """Macros.add(12345,54321) """
-////                                         |A new line for check""".stripMargin
-//    else super.get(offset, length)
-//  }
-
-  def myReplace(offset: Int, length: Int, text: String) {
-    val e = new DocumentEvent(this, offset, length, text)
-    fireDocumentAboutToBeChanged(e)
-
-    val store = getStore
-    getStore().replace(offset, length, text);
-    getTracker().replace(offset, length, text);
-
-    fireDocumentChanged(e);
-  }
+  //      if (m.offset >  getLineOffset(line))
+  //        if()
+  //        new Region(lineInfo.getOffset + m.text.length - m.length, lineInfo.getLength + m.text.length - m.length)
+  //      else lineInfo
+  //    lineInfo
+  //  }
+  //
+  //  override def get() = {
+  //    val get = super.get
+  //    get.take(m.offset) + m.text + get.drop(m.offset + m.length)
+  //  }
 }
 
 class MacroSourceViewer(parent: Composite, verticalRuler: IVerticalRuler, overviewRuler: IOverviewRuler, showAnnotationsOverview: Boolean, styles: Int, store: IPreferenceStore)
@@ -147,7 +194,6 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
     removeMacroExpansions()
     super.performSave(overwrite, progressMonitor)
-    //    annotationModel.addAnnotationModelListener(macroAnnotationModelListener)
     expandMacros()
   }
 
