@@ -74,6 +74,9 @@ import org.eclipse.jface.text.DocumentEvent
 import org.eclipse.jface.text.ITextStore
 import org.eclipse.jface.text.Region
 import org.eclipse.jface.text.ILineTracker
+import org.eclipse.jface.text.IRegion
+import org.eclipse.core.internal.filebuffers.SynchronizableDocument
+import org.eclipse.jface.text.AbstractDocument
 
 class MacroProjectionDocumentManager extends ProjectionDocumentManager {
   override def createProjectionDocument(master: IDocument) = {
@@ -81,92 +84,95 @@ class MacroProjectionDocumentManager extends ProjectionDocumentManager {
   }
 }
 
-class MacroTextStore(private val master: ITextStore) extends ITextStore {
-  //  private var macroRegions: List[Position]
-  val m = new { val offset = 28; val length = 4; val text = "|AAA|"; def collision = text.length - length }
-  def get(offset: Int) = master.get(offset)
-  //  def get(offset: Int, length: Int) = master.get(offset, length)
+class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
+
+  override def get(offset: Int) = master.get(map2InnerOffset(offset))
   override def get(offset: Int, length: Int) = {
-    if (offset + length < m.offset) master.get(offset, length)
-    else if (m.offset + m.length < offset + length) {
-      val mas = master.get(offset, length - m.collision)
+    val (innerOffset, innerLength) = map2Inner(offset, length)
+    val innerText = master.get(innerOffset, innerLength)
 
-      mas.take(m.offset - offset) + m.text + mas.drop(m.offset - offset + m.length)
-    } else master.get(offset - m.collision, length - m.collision)
+    addMacro(innerOffset, innerLength, innerText)
   }
 
-  //  def getLength = master.getLength
   override def getLength() = {
-    master.getLength + m.collision
+    if(master.getLength > 0) master.getLength + m.collision else master.getLength
   }
-  def replace(offset: Int, length: Int, text: String) = master.replace(offset, length, text)
+  def replace(offset: Int, length: Int, text: String) = {
+    val (innerOffset, innerLenth) = map2Inner(offset, length)
+
+    master.replace(innerOffset, innerLenth, text)
+  }
+
   def set(text: String) = master.set(text)
 }
 
-class MacroLineTracker(val master: ILineTracker) extends ILineTracker {
-  val m = new { val offset = 28; val length = 4; val text = "|AAA|"; def collision = text.length - length }
+trait M {
+  val m = new { val offset = 59; val length = 0; val text = """"123456789""""; val collision = text.length - length }
 
-  def computeNumberOfLines(text: String): Int = master.computeNumberOfLines(text)
-  def getLegalLineDelimiters(): Array[String] = master.getLegalLineDelimiters()
-  def getLineDelimiter(line: Int): String = master.getLineDelimiter(line)
-  def getLineInformation(line: Int): org.eclipse.jface.text.IRegion = {
+  def map2InnerOffset(offset: Int) =
+    if (offset > m.offset)
+      if (offset > m.offset + m.length) offset - m.collision
+      else m.offset //if offset is inside macroExpansion return start of macroExpansion
+    else offset
+
+  def map2InnerLength(offset: Int, length: Int) = if (offset < m.offset && m.offset + m.length < offset + length) length - m.collision else length
+
+  def map2Inner(offset: Int, length: Int) = (map2InnerOffset(offset), map2InnerLength(offset, length))
+
+  def map2OuterOffset(regOffset: Int) = if (regOffset > m.offset) regOffset + m.collision else regOffset
+  def map2OuterLength(regOffset: Int, regLength: Int) = if (regOffset < m.offset && m.offset + m.length < regOffset + regLength) regLength + m.collision else regLength
+  def map2Outer(region: IRegion) = new Region(map2OuterOffset(region.getOffset), map2OuterLength(region.getOffset, region.getLength))
+
+  def addMacro(offset: Int, length: Int, innerText: String) = if (offset < m.offset && m.offset + m.length < offset + length) {
+    innerText.take(m.offset - offset) + m.text + innerText.drop(m.offset - offset + m.length)
+  } else innerText
+}
+
+class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
+  override def computeNumberOfLines(text: String): Int = master.computeNumberOfLines(text)
+  override def getLegalLineDelimiters(): Array[String] = master.getLegalLineDelimiters()
+  override def getLineDelimiter(line: Int): String = master.getLineDelimiter(line)
+  override def replace(offset: Int, length: Int, text: String) {
+    val (innerOffset, innerLenth) = map2Inner(offset, length)
+
+    master.replace(innerOffset, innerLenth, text)
+  }
+  override def set(text: String): Unit = master.set(text)
+
+  override def getLineInformation(line: Int): IRegion = {
     val mas = master.getLineInformation(line)
 
-    //    val collision = m.text.length - m.length
-    if (mas.getOffset + mas.getLength < m.offset) mas
-    else if (mas.getOffset + mas.getLength < m.offset + m.length)
-      new Region(mas.getOffset, mas.getLength + m.collision)
-    else new Region(mas.getOffset + m.collision, mas.getLength + m.collision)
-    //    mas
+    val _d = map2Outer(mas)
+    _d
   }
 
-  def getLineInformationOfOffset(offset: Int): org.eclipse.jface.text.IRegion = master.getLineInformationOfOffset(offset)
-  def getLineLength(line: Int): Int = master.getLineLength(line)
-  def getLineNumberOfOffset(offset: Int): Int = master.getLineNumberOfOffset(offset)
-  def getLineOffset(line: Int): Int = master.getLineOffset(line)
-  def getNumberOfLines(): Int = master.getNumberOfLines()
-  def getNumberOfLines(offset: Int, length: Int): Int = master.getNumberOfLines(offset, length)
-  def replace(offset: Int, length: Int, text: String): Unit = master.replace(offset, length, text)
-  def set(text: String): Unit = master.set(text)
+  override def getLineInformationOfOffset(offset: Int): org.eclipse.jface.text.IRegion = {
+    val t = map2InnerOffset(offset)
+    val mas = master.getLineInformationOfOffset(t)
+
+    val _d = map2Outer(mas)
+    _d
+  }
+  override def getLineLength(line: Int): Int = getLineInformation(line).getLength
+  override def getLineOffset(line: Int): Int = getLineInformation(line).getOffset
+  override def getLineNumberOfOffset(offset: Int): Int = master.getLineNumberOfOffset(map2InnerOffset(offset))
+  override def getNumberOfLines(): Int = master.getNumberOfLines()
+  override def getNumberOfLines(offset: Int, length: Int): Int = {
+    val (innerOffset, innerLength) = map2Inner(offset, length)
+
+    master.getNumberOfLines(innerOffset, innerLength)
+  }
 }
 
 class MacroProjectionDocument(master: IDocument) extends ProjectionDocument(master) {
   import org.eclipse.jface.text.Document
 
-  //  def macroReplace(offset: Int, length: Int, text: String) {
-  //    val e = new DocumentEvent(this, offset, length, text)
-  //    fireDocumentAboutToBeChanged(e)
-  //
-  //    val store = getStore
-  //    getStore().replace(offset, length, text);
-  //    getTracker().replace(offset, length, text);
-  //
-  //    fireDocumentChanged(e);
-  //  }
-
-  override def setTextStore(store: ITextStore) {
-    super.setTextStore(new MacroTextStore(store))
-  }
-
-  override def setLineTracker(tracker: ILineTracker) {
-    super.setLineTracker(new MacroLineTracker(tracker))
-  }
-
-  //  val m = new { val offset = 28; val length = 4; val text = "|AAA|" }
-
-  //  override def getLineInformation(line: Int) = {
-  //    val lineInfo = super.getLineInformation(line)
-
-  //      if (m.offset >  getLineOffset(line))
-  //        if()
-  //        new Region(lineInfo.getOffset + m.text.length - m.length, lineInfo.getLength + m.text.length - m.length)
-  //      else lineInfo
-  //    lineInfo
+  //  override def setTextStore(store: ITextStore) {
+  //    super.setTextStore(new MacroTextStore(store))
   //  }
   //
-  //  override def get() = {
-  //    val get = super.get
-  //    get.take(m.offset) + m.text + get.drop(m.offset + m.length)
+  //  override def setLineTracker(tracker: ILineTracker) {
+  //    super.setLineTracker(new MacroLineTracker(tracker))
   //  }
 }
 
@@ -179,6 +185,32 @@ class MacroSourceViewer(parent: Composite, verticalRuler: IVerticalRuler, overvi
 }
 
 class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor with ScalaMacroEditor with ScalaLineNumberMacroEditor { self =>
+  override def doSetInput(input: IEditorInput) = {
+    super.doSetInput(input: IEditorInput)
+    val document = getDocumentProvider.getDocument(input)
+
+    val abstractDocumentClass = Class.forName("org.eclipse.jface.text.AbstractDocument");
+
+    {
+      val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getStore")
+      val setTextStoreMethod = abstractDocumentClass.getDeclaredMethod("setTextStore", Class.forName("org.eclipse.jface.text.ITextStore"))
+      getStoreMethod.setAccessible(true)
+      setTextStoreMethod.setAccessible(true)
+      val master = getStoreMethod.invoke(document).asInstanceOf[ITextStore]
+      val slave = new MacroTextStore(master)
+      setTextStoreMethod.invoke(document, slave)
+    }
+
+    {
+      val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getTracker")
+      val setTextStoreMethod = abstractDocumentClass.getDeclaredMethod("setLineTracker", Class.forName("org.eclipse.jface.text.ILineTracker"))
+      getStoreMethod.setAccessible(true)
+      setTextStoreMethod.setAccessible(true)
+      val master = getStoreMethod.invoke(document).asInstanceOf[ILineTracker]
+      val slave = new MacroLineTracker(master)
+      setTextStoreMethod.invoke(document, slave)
+    }
+  }
 
   override protected def createLineNumberRulerColumn(): IVerticalRulerColumn = {
     val verticalRuler = new LineNumberChangeRulerColumnWithMacro(getSharedColors)
