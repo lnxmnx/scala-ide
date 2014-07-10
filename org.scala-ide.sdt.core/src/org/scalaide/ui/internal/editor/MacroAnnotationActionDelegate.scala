@@ -8,13 +8,14 @@ import collection.JavaConversions._
 import org.eclipse.ui.part.FileEditorInput
 import org.eclipse.core.resources.IMarker
 import org.eclipse.ui.texteditor.MarkerAnnotation
+import org.eclipse.jface.text.DocumentEvent
 
 class MacroAnnotationActionDelegate extends AbstractRulerActionDelegate {
   import org.eclipse.jface.action.Action
   import org.eclipse.jface.action.IAction
   import org.eclipse.ui.texteditor.TextEditorAction
 
-  var macroRulerAction: Option[MacroRulerAction] = None  // Can be configured to work in mouseDown
+  var macroRulerAction: Option[MacroRulerAction] = None // Can be configured to work in mouseDown
 
   class MacroRulerAction(val iTextEditor: ITextEditor, val iVerticalRulerInfo: IVerticalRulerInfo) extends Action {
     private val editorInput = iTextEditor.getEditorInput
@@ -70,7 +71,35 @@ class MacroAnnotationActionDelegate extends AbstractRulerActionDelegate {
         }
 
         annotationModel.removeAnnotation(annotation)
-        document.replace(pOffset, pLength, indentedMacroExpansion)
+        //                document.replace(pOffset, pLength, indentedMacroExpansion)
+
+        val e = new DocumentEvent(document, 59, 11, "");
+
+        val abstractDocumentClass = Class.forName("org.eclipse.jface.text.AbstractDocument");
+        val fireAboutToBeChanged = abstractDocumentClass.getDeclaredMethod("fireDocumentAboutToBeChanged", Class.forName("org.eclipse.jface.text.DocumentEvent"))
+        fireAboutToBeChanged.setAccessible(true)
+        fireAboutToBeChanged.invoke(document, e)
+
+        {
+          val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getTracker")
+          getStoreMethod.setAccessible(true)
+          val master = getStoreMethod.invoke(document).asInstanceOf[MacroLineTracker]
+
+          //          master.replaceMacro(pOffset, pLength, indentedMacroExpansion)
+          master.replaceMacro(59, 0, "")
+        }
+
+        {
+          val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getStore")
+          getStoreMethod.setAccessible(true)
+          val master = getStoreMethod.invoke(document).asInstanceOf[MacroTextStore]
+
+          //          master.replaceMacro(pOffset, pLength, indentedMacroExpansion)
+          master.replaceMacro(59, 0, "")
+        }
+        val fireDocumentChanged = abstractDocumentClass.getDeclaredMethod("fireDocumentChanged", Class.forName("org.eclipse.jface.text.DocumentEvent"))
+        fireDocumentChanged.setAccessible(true)
+        fireDocumentChanged.invoke(document, e)
       })
 
       if (annotations2Expand.isEmpty) {

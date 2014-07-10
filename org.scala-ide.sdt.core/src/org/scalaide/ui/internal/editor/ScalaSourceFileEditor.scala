@@ -95,19 +95,23 @@ class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
   }
 
   override def getLength() = {
-    if(master.getLength > 0) master.getLength + m.collision else master.getLength
+    if (master.getLength > 0) master.getLength + m.collision else master.getLength
   }
-  def replace(offset: Int, length: Int, text: String) = {
+  override def replace(offset: Int, length: Int, text: String) = {
     val (innerOffset, innerLenth) = map2Inner(offset, length)
 
     master.replace(innerOffset, innerLenth, text)
   }
 
-  def set(text: String) = master.set(text)
+  override def set(text: String) = master.set(text)
+
+  def replaceMacro(_offset: Int, _length: Int, _text: String) {
+    m = new { val offset = _offset; val length = _length; val text = _text; val collision = text.length - length }
+  }
 }
 
 trait M {
-  val m = new { val offset = 59; val length = 0; val text = """"123456789""""; val collision = text.length - length }
+  var m = new { val offset = 59; val length = 0; val text = """"123456789""""; val collision = text.length - length }
 
   def map2InnerOffset(offset: Int) =
     if (offset > m.offset)
@@ -161,6 +165,10 @@ class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
     val (innerOffset, innerLength) = map2Inner(offset, length)
 
     master.getNumberOfLines(innerOffset, innerLength)
+  }
+
+  def replaceMacro(_offset: Int, _length: Int, _text: String) {
+    m = new { val offset = _offset; val length = _length; val text = _text; val collision = text.length - length }
   }
 }
 
