@@ -78,6 +78,33 @@ import org.eclipse.jface.text.IRegion
 import org.eclipse.core.internal.filebuffers.SynchronizableDocument
 import org.eclipse.jface.text.AbstractDocument
 
+trait M {
+  class MacroRegion(val offset: Int, val length: Int, val text: String) {
+    lazy val collision = text.length - length
+  }
+
+  var savePeriod = false
+  var m = new MacroRegion(offset = 59, length = 0, text = """"123456789"""")
+
+  def map2InnerOffset(offset: Int) =
+    if (offset > m.offset)
+      if (offset > m.offset + m.length) offset - m.collision
+      else m.offset  //if offset is inside macroExpansion return start of macroExpansion
+    else offset
+
+  def map2InnerLength(offset: Int, length: Int) = if (offset < m.offset && m.offset + m.length < offset + length) length - m.collision else length
+
+  def map2Inner(offset: Int, length: Int) = (map2InnerOffset(offset), map2InnerLength(offset, length))
+
+  def map2OuterOffset(regOffset: Int) = if (regOffset > m.offset) regOffset + m.collision else regOffset
+  def map2OuterLength(regOffset: Int, regLength: Int) = if (regOffset < m.offset && m.offset + m.length < regOffset + regLength) regLength + m.collision else regLength
+  def map2Outer(region: IRegion) = new Region(map2OuterOffset(region.getOffset), map2OuterLength(region.getOffset, region.getLength))
+
+  def addMacro(offset: Int, length: Int, innerText: String) = if (offset < m.offset && m.offset + m.length < offset + length) {
+    innerText.take(m.offset - offset) + m.text + innerText.drop(m.offset - offset + m.length)
+  } else innerText
+}
+
 class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
   override def get(offset: Int) =
     if (savePeriod) master.get(offset)
@@ -107,32 +134,9 @@ class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
 
   override def set(text: String) = master.set(text)
 
-  def replaceMacro(_offset: Int, _length: Int, _text: String) {
-    m = new { val offset = _offset; val length = _length; val text = _text; val collision = text.length - length }
+  def replaceMacro(offset: Int, length: Int, text: String) {
+    m = new MacroRegion(offset, length, text)
   }
-}
-
-trait M {
-  var savePeriod = false
-  var m = new { val offset = 59; val length = 0; val text = """"123456789""""; val collision = text.length - length }
-
-  def map2InnerOffset(offset: Int) =
-    if (offset > m.offset)
-      if (offset > m.offset + m.length) offset - m.collision
-      else m.offset //if offset is inside macroExpansion return start of macroExpansion
-    else offset
-
-  def map2InnerLength(offset: Int, length: Int) = if (offset < m.offset && m.offset + m.length < offset + length) length - m.collision else length
-
-  def map2Inner(offset: Int, length: Int) = (map2InnerOffset(offset), map2InnerLength(offset, length))
-
-  def map2OuterOffset(regOffset: Int) = if (regOffset > m.offset) regOffset + m.collision else regOffset
-  def map2OuterLength(regOffset: Int, regLength: Int) = if (regOffset < m.offset && m.offset + m.length < regOffset + regLength) regLength + m.collision else regLength
-  def map2Outer(region: IRegion) = new Region(map2OuterOffset(region.getOffset), map2OuterLength(region.getOffset, region.getLength))
-
-  def addMacro(offset: Int, length: Int, innerText: String) = if (offset < m.offset && m.offset + m.length < offset + length) {
-    innerText.take(m.offset - offset) + m.text + innerText.drop(m.offset - offset + m.length)
-  } else innerText
 }
 
 class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
@@ -178,15 +182,15 @@ class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
       master.getNumberOfLines(innerOffset, innerLength)
     }
 
-  def replaceMacro(_offset: Int, _length: Int, _text: String) {
-    m = new { val offset = _offset; val length = _length; val text = _text; val collision = text.length - length }
+  def replaceMacro(offset: Int, length: Int, text: String) {
+    m = new MacroRegion(offset, length, text)
   }
 }
 
 class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor with ScalaMacroEditor with ScalaLineNumberMacroEditor { self =>
   override def doSetInput(input: IEditorInput) = {
     super.doSetInput(input: IEditorInput)
-    val masterStore =  getDocumentStore
+    val masterStore = getDocumentStore
     val slaveStore = new MacroTextStore(masterStore)
     setDocumentStore(slaveStore)
 
@@ -203,7 +207,11 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
   }
 
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
+    documentStore.savePeriod = true
+    documentTracker.savePeriod = true
     super.performSave(overwrite, progressMonitor)
+    documentStore.savePeriod = false
+    documentTracker.savePeriod = false
   }
 
   private var occurrenceAnnotations: Set[Annotation] = Set()

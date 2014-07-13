@@ -18,14 +18,14 @@ import org.eclipse.jface.text.IDocument
 class MyRange(val startLine: Int, val endLine: Int) {}
 
 trait StoreAndTrackerHack {
-  val document: IDocument
+  def document: IDocument
   private val abstractDocumentClass = Class.forName("org.eclipse.jface.text.AbstractDocument")
 
   val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getStore")
   getStoreMethod.setAccessible(true)
   def getDocumentStore = getStoreMethod.invoke(document).asInstanceOf[ITextStore]
 
-  lazy val documentStore = getDocumentStore
+  lazy val documentStore = getDocumentStore.asInstanceOf[MacroTextStore]
 
   val setTextStoreMethod = abstractDocumentClass.getDeclaredMethod("setTextStore", Class.forName("org.eclipse.jface.text.ITextStore"))
   setTextStoreMethod.setAccessible(true)
@@ -35,7 +35,7 @@ trait StoreAndTrackerHack {
   getTrackerMethod.setAccessible(true)
   def getDocumentTracker = getTrackerMethod.invoke(document).asInstanceOf[ILineTracker]
 
-  lazy val documentTracker = getDocumentTracker
+  lazy val documentTracker = getDocumentTracker.asInstanceOf[MacroLineTracker]
 
   val setLineTrackerMethod = abstractDocumentClass.getDeclaredMethod("setLineTracker", Class.forName("org.eclipse.jface.text.ILineTracker"))
   setLineTrackerMethod.setAccessible(true)
