@@ -11,15 +11,41 @@ import org.eclipse.core.resources.IMarker
 import org.scalaide.ui.internal.editor.decorators.implicits.MacroExpansionAnnotation
 import org.scalaide.ui.internal.editor.decorators.implicits.Marker2Expand
 import org.scalaide.ui.internal.editor.decorators.implicits.ScalaMacroMarker
+import org.eclipse.jface.text.ITextStore
+import org.eclipse.jface.text.ILineTracker
+import org.eclipse.jface.text.IDocument
 
 class MyRange(val startLine: Int, val endLine: Int) {}
 
-trait ScalaMacroEditor { self: ScalaSourceFileEditor =>
-  //TODO: createBaseExpansion?
+trait StoreAndTrackerHack {
+  val document: IDocument
+  private val abstractDocumentClass = Class.forName("org.eclipse.jface.text.AbstractDocument")
+
+  val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getStore")
+  getStoreMethod.setAccessible(true)
+  def getDocumentStore = getStoreMethod.invoke(document).asInstanceOf[ITextStore]
+
+  lazy val documentStore = getDocumentStore
+
+  val setTextStoreMethod = abstractDocumentClass.getDeclaredMethod("setTextStore", Class.forName("org.eclipse.jface.text.ITextStore"))
+  setTextStoreMethod.setAccessible(true)
+  def setDocumentStore(slave: ITextStore) = setTextStoreMethod.invoke(document, slave)
+
+  val getTrackerMethod = abstractDocumentClass.getDeclaredMethod("getTracker")
+  getTrackerMethod.setAccessible(true)
+  def getDocumentTracker = getTrackerMethod.invoke(document).asInstanceOf[ILineTracker]
+
+  lazy val documentTracker = getDocumentTracker
+
+  val setLineTrackerMethod = abstractDocumentClass.getDeclaredMethod("setLineTracker", Class.forName("org.eclipse.jface.text.ILineTracker"))
+  setLineTrackerMethod.setAccessible(true)
+  def setDocumentTracker(tracker: ILineTracker) = setLineTrackerMethod.invoke(document, tracker)
+}
+
+trait ScalaMacroEditor extends StoreAndTrackerHack { self: ScalaSourceFileEditor =>
   var macroExpansionRegions: List[MyRange] = Nil
   val macroAnnotationModelListener = new MacroAnnotationsModelListener
 
-  //  def visibleDocument = getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument
   def editorInput = getEditorInput
   def document = getDocumentProvider.getDocument(editorInput) //getViewer.asInstanceOf[MacroSourceViewer].getVisibleDocument.asInstanceOf[MacroProjectionDocument] //getDocumentProvider.getDocument(editorInput)
   def annotationModel = getDocumentProvider.getAnnotationModel(editorInput)

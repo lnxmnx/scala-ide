@@ -78,30 +78,32 @@ import org.eclipse.jface.text.IRegion
 import org.eclipse.core.internal.filebuffers.SynchronizableDocument
 import org.eclipse.jface.text.AbstractDocument
 
-class MacroProjectionDocumentManager extends ProjectionDocumentManager {
-  override def createProjectionDocument(master: IDocument) = {
-    new MacroProjectionDocument(master)
-  }
-}
-
 class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
+  override def get(offset: Int) =
+    if (savePeriod) master.get(offset)
+    else master.get(map2InnerOffset(offset))
+  override def get(offset: Int, length: Int) =
+    if (savePeriod) master.get(offset, length)
+    else {
+      val (innerOffset, innerLength) = map2Inner(offset, length)
+      val innerText = master.get(innerOffset, innerLength)
 
-  override def get(offset: Int) = master.get(map2InnerOffset(offset))
-  override def get(offset: Int, length: Int) = {
-    val (innerOffset, innerLength) = map2Inner(offset, length)
-    val innerText = master.get(innerOffset, innerLength)
+      addMacro(innerOffset, innerLength, innerText)
+    }
 
-    addMacro(innerOffset, innerLength, innerText)
-  }
+  override def getLength() =
+    if (savePeriod) master.getLength()
+    else {
+      if (master.getLength > 0) master.getLength + m.collision
+      else master.getLength
+    }
+  override def replace(offset: Int, length: Int, text: String) =
+    if (savePeriod) master.replace(offset, length, text)
+    else {
+      val (innerOffset, innerLenth) = map2Inner(offset, length)
 
-  override def getLength() = {
-    if (master.getLength > 0) master.getLength + m.collision else master.getLength
-  }
-  override def replace(offset: Int, length: Int, text: String) = {
-    val (innerOffset, innerLenth) = map2Inner(offset, length)
-
-    master.replace(innerOffset, innerLenth, text)
-  }
+      master.replace(innerOffset, innerLenth, text)
+    }
 
   override def set(text: String) = master.set(text)
 
@@ -111,6 +113,7 @@ class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
 }
 
 trait M {
+  var savePeriod = false
   var m = new { val offset = 59; val length = 0; val text = """"123456789""""; val collision = text.length - length }
 
   def map2InnerOffset(offset: Int) =
@@ -136,88 +139,60 @@ class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
   override def computeNumberOfLines(text: String): Int = master.computeNumberOfLines(text)
   override def getLegalLineDelimiters(): Array[String] = master.getLegalLineDelimiters()
   override def getLineDelimiter(line: Int): String = master.getLineDelimiter(line)
-  override def replace(offset: Int, length: Int, text: String) {
-    val (innerOffset, innerLenth) = map2Inner(offset, length)
+  override def replace(offset: Int, length: Int, text: String) =
+    if (savePeriod) master.replace(offset, length, text)
+    else {
+      val (innerOffset, innerLenth) = map2Inner(offset, length)
 
-    master.replace(innerOffset, innerLenth, text)
-  }
+      master.replace(innerOffset, innerLenth, text)
+    }
+
   override def set(text: String): Unit = master.set(text)
 
-  override def getLineInformation(line: Int): IRegion = {
-    val mas = master.getLineInformation(line)
+  override def getLineInformation(line: Int): IRegion =
+    if (savePeriod) master.getLineInformation(line)
+    else {
+      val mas = master.getLineInformation(line)
 
-    val _d = map2Outer(mas)
-    _d
-  }
+      map2Outer(mas)
+    }
 
-  override def getLineInformationOfOffset(offset: Int): org.eclipse.jface.text.IRegion = {
-    val t = map2InnerOffset(offset)
-    val mas = master.getLineInformationOfOffset(t)
+  override def getLineInformationOfOffset(offset: Int): org.eclipse.jface.text.IRegion =
+    if (savePeriod) master.getLineInformationOfOffset(offset)
+    else {
+      val t = map2InnerOffset(offset)
+      val mas = master.getLineInformationOfOffset(t)
 
-    val _d = map2Outer(mas)
-    _d
-  }
+      map2Outer(mas)
+    }
+
   override def getLineLength(line: Int): Int = getLineInformation(line).getLength
   override def getLineOffset(line: Int): Int = getLineInformation(line).getOffset
   override def getLineNumberOfOffset(offset: Int): Int = master.getLineNumberOfOffset(map2InnerOffset(offset))
   override def getNumberOfLines(): Int = master.getNumberOfLines()
-  override def getNumberOfLines(offset: Int, length: Int): Int = {
-    val (innerOffset, innerLength) = map2Inner(offset, length)
+  override def getNumberOfLines(offset: Int, length: Int): Int =
+    if (savePeriod) master.getNumberOfLines(offset, length)
+    else {
+      val (innerOffset, innerLength) = map2Inner(offset, length)
 
-    master.getNumberOfLines(innerOffset, innerLength)
-  }
+      master.getNumberOfLines(innerOffset, innerLength)
+    }
 
   def replaceMacro(_offset: Int, _length: Int, _text: String) {
     m = new { val offset = _offset; val length = _length; val text = _text; val collision = text.length - length }
   }
 }
 
-class MacroProjectionDocument(master: IDocument) extends ProjectionDocument(master) {
-  import org.eclipse.jface.text.Document
-
-  //  override def setTextStore(store: ITextStore) {
-  //    super.setTextStore(new MacroTextStore(store))
-  //  }
-  //
-  //  override def setLineTracker(tracker: ILineTracker) {
-  //    super.setLineTracker(new MacroLineTracker(tracker))
-  //  }
-}
-
-class MacroSourceViewer(parent: Composite, verticalRuler: IVerticalRuler, overviewRuler: IOverviewRuler, showAnnotationsOverview: Boolean, styles: Int, store: IPreferenceStore)
-  extends JavaSourceViewer(parent, verticalRuler, overviewRuler, showAnnotationsOverview, styles, store) {
-  override def createSlaveDocumentManager() = {
-    new MacroProjectionDocumentManager
-  }
-  override def getVisibleDocument = super.getVisibleDocument
-}
-
 class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationUnitEditor with ScalaMacroEditor with ScalaLineNumberMacroEditor { self =>
   override def doSetInput(input: IEditorInput) = {
     super.doSetInput(input: IEditorInput)
-    val document = getDocumentProvider.getDocument(input)
+    val masterStore =  getDocumentStore
+    val slaveStore = new MacroTextStore(masterStore)
+    setDocumentStore(slaveStore)
 
-    val abstractDocumentClass = Class.forName("org.eclipse.jface.text.AbstractDocument");
-
-    {
-      val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getStore")
-      val setTextStoreMethod = abstractDocumentClass.getDeclaredMethod("setTextStore", Class.forName("org.eclipse.jface.text.ITextStore"))
-      getStoreMethod.setAccessible(true)
-      setTextStoreMethod.setAccessible(true)
-      val master = getStoreMethod.invoke(document).asInstanceOf[ITextStore]
-      val slave = new MacroTextStore(master)
-      setTextStoreMethod.invoke(document, slave)
-    }
-
-    {
-      val getStoreMethod = abstractDocumentClass.getDeclaredMethod("getTracker")
-      val setTextStoreMethod = abstractDocumentClass.getDeclaredMethod("setLineTracker", Class.forName("org.eclipse.jface.text.ILineTracker"))
-      getStoreMethod.setAccessible(true)
-      setTextStoreMethod.setAccessible(true)
-      val master = getStoreMethod.invoke(document).asInstanceOf[ILineTracker]
-      val slave = new MacroLineTracker(master)
-      setTextStoreMethod.invoke(document, slave)
-    }
+    val masterTracker = getDocumentTracker
+    val slaveTracker = new MacroLineTracker(masterTracker)
+    setDocumentTracker(slaveTracker)
   }
 
   override protected def createLineNumberRulerColumn(): IVerticalRulerColumn = {
@@ -227,14 +202,8 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
     verticalRuler
   }
 
-  override protected def createJavaSourceViewer(parent: Composite, verticalRuler: IVerticalRuler, overviewRuler: IOverviewRuler, isOverviewRulerVisible: Boolean, styles: Int, store: IPreferenceStore) = {
-    new MacroSourceViewer(parent, verticalRuler, overviewRuler, isOverviewRulerVisible, styles, store) //FIXME: see super.createJavaSourceViewer(params...)
-  }
-
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
-    removeMacroExpansions()
     super.performSave(overwrite, progressMonitor)
-    expandMacros()
   }
 
   private var occurrenceAnnotations: Set[Annotation] = Set()
