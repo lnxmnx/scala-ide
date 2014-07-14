@@ -78,7 +78,7 @@ import org.eclipse.jface.text.IRegion
 import org.eclipse.core.internal.filebuffers.SynchronizableDocument
 import org.eclipse.jface.text.AbstractDocument
 
-trait M {
+trait InterLayer {
   class MacroRegion(val offset: Int, val length: Int, val text: String) {
     lazy val collision = text.length - length
   }
@@ -89,7 +89,7 @@ trait M {
   def map2InnerOffset(offset: Int) =
     if (offset > m.offset)
       if (offset > m.offset + m.length) offset - m.collision
-      else m.offset  //if offset is inside macroExpansion return start of macroExpansion
+      else m.offset //if offset is inside macroExpansion return start of macroExpansion
     else offset
 
   def map2InnerLength(offset: Int, length: Int) = if (offset < m.offset && m.offset + m.length < offset + length) length - m.collision else length
@@ -105,7 +105,7 @@ trait M {
   } else innerText
 }
 
-class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
+class MacroTextStore(private val master: ITextStore) extends ITextStore with InterLayer {
   override def get(offset: Int) =
     if (savePeriod) master.get(offset)
     else master.get(map2InnerOffset(offset))
@@ -121,14 +121,17 @@ class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
   override def getLength() =
     if (savePeriod) master.getLength()
     else {
-      if (master.getLength > 0) master.getLength + m.collision
-      else master.getLength
+      if (master.getLength != 0) master.getLength + m.collision
+      else 0
     }
   override def replace(offset: Int, length: Int, text: String) =
     if (savePeriod) master.replace(offset, length, text)
     else {
       val (innerOffset, innerLenth) = map2Inner(offset, length)
 
+      if (offset + length < m.offset) {
+        replaceMacro(m.offset + text.length - length, m.length, m.text)
+      }
       master.replace(innerOffset, innerLenth, text)
     }
 
@@ -139,7 +142,7 @@ class MacroTextStore(private val master: ITextStore) extends ITextStore with M {
   }
 }
 
-class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
+class MacroLineTracker(val master: ILineTracker) extends ILineTracker with InterLayer {
   override def computeNumberOfLines(text: String): Int = master.computeNumberOfLines(text)
   override def getLegalLineDelimiters(): Array[String] = master.getLegalLineDelimiters()
   override def getLineDelimiter(line: Int): String = master.getLineDelimiter(line)
@@ -149,6 +152,9 @@ class MacroLineTracker(val master: ILineTracker) extends ILineTracker with M {
       val (innerOffset, innerLenth) = map2Inner(offset, length)
 
       master.replace(innerOffset, innerLenth, text)
+      if (offset + length < m.offset) {
+        m.offset + text.length - length
+      }
     }
 
   override def set(text: String): Unit = master.set(text)
