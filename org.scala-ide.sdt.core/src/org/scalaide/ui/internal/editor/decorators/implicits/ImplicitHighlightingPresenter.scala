@@ -105,6 +105,11 @@ object ImplicitHighlightingPresenter {
 
     new Traverser {
       override def traverse(t: Tree): Unit = {
+        if (t.attachments.get[compiler.analyzer.MacroExpansionAttachment].isDefined)
+          mkMacroExpansionAnnotation(t).map(macroExpansionAnnotation => {
+            val (annotation, pos) = macroExpansionAnnotation
+            macroExpansions += (annotation -> pos)
+          })
         t match {
           case v: ApplyImplicitView =>
             val (annotation, pos) = mkImplicitConversionAnnotation(v)
@@ -112,11 +117,6 @@ object ImplicitHighlightingPresenter {
           case v: ApplyToImplicitArgs if !pluginStore.getBoolean(ImplicitsPreferencePage.P_CONVERSIONS_ONLY) =>
             val (annotation, pos) = mkImplicitArgumentAnnotation(v)
             implicits += (annotation -> pos)
-          case v if v.attachments.get[compiler.analyzer.MacroExpansionAttachment].isDefined =>
-            mkMacroExpansionAnnotation(v).map(macroExpansionAnnotation => {
-              val (annotation, pos) = macroExpansionAnnotation
-              macroExpansions += (annotation -> pos)
-            })
           case _ =>
         }
         super.traverse(t)
