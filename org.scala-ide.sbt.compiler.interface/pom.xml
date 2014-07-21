@@ -15,6 +15,7 @@
     <dependency>
       <groupId>com.typesafe.sbt</groupId>
       <artifactId>compiler-interface-precompiled</artifactId>
+      <version>${sbt.ide.version}</version>
       <optional>true</optional>
     </dependency>
   </dependencies>
@@ -30,9 +31,9 @@
           <instructions>
             <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
             <Bundle-Name>Sbt Compiler Interface for Eclipse</Bundle-Name>
-            <Bundle-Version>${sbt.osgi.version}</Bundle-Version>
+            <Bundle-Version>${sbt.osgi.light.version}</Bundle-Version>
             <Embed-Dependency>*;scope=compile|runtime;inline=true</Embed-Dependency>
-            <_exportcontents>xsbt.*;version=${sbt.osgi.version}</_exportcontents>
+            <_exportcontents>xsbt.*;version=${sbt.osgi.light.version}</_exportcontents>
             <Embed-StripVersion>true</Embed-StripVersion>
           </instructions>
         </configuration>

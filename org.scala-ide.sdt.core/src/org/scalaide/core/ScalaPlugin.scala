@@ -57,6 +57,11 @@ import scala.tools.nsc.Settings
 import org.scalaide.core.internal.project.ScalaProject
 import org.scalaide.ui.internal.diagnostic
 import org.scalaide.util.internal.CompilerUtils
+import org.scalaide.core.internal.builder.zinc.CompilerInterfaceStore
+import org.scalaide.util.internal.eclipse.EclipseUtils
+import org.scalaide.util.internal.FixedSizeCache
+import org.scalaide.core.internal.project.ScalaInstallation
+import org.scalaide.ui.internal.migration.RegistryExtender
 
 object ScalaPlugin {
   final val IssueTracker = "https://www.assembla.com/spaces/scala-ide/support/tickets"
@@ -79,13 +84,12 @@ object ScalaPlugin {
 }
 
 class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IResourceChangeListener with IElementChangedListener with HasLogger {
+  import CompilerUtils.{isBinaryPrevious, isBinarySame }
+
   def pluginId = "org.scala-ide.sdt.core"
-  def compilerPluginId = "org.scala-lang.scala-compiler"
   def libraryPluginId = "org.scala-lang.scala-library"
-  def actorsPluginId = "org.scala-lang.scala-actors"
-  def reflectPluginId = "org.scala-lang.scala-reflect"
   def sbtPluginId = "org.scala-ide.sbt.full.library"
-  def sbtCompilerInterfaceId = "org.scala-ide.sbt.compiler.interface"
+  lazy val sbtCompilerInterfaceId = "org.scala-ide.sbt.compiler.interface"
 
   def wizardPath = pluginId + ".wizards"
   def wizardId(name: String) = wizardPath + ".new" + name
@@ -108,6 +112,7 @@ class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IReso
   def launchTypeId = "scala.application"
   def problemMarkerId = pluginId + ".problem"
   def classpathProblemMarkerId = pluginId + ".classpathProblem"
+  def scalaVersionProblemMarkerId = pluginId + ".scalaVersionProblem"
   def settingProblemMarkerId = pluginId + ".settingProblem"
   def taskMarkerId = pluginId + ".task"
 
@@ -117,8 +122,6 @@ class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IReso
   val scalaFileExtn = ".scala"
   val javaFileExtn = ".java"
   val jarFileExtn = ".jar"
-
-  import CompilerUtils.{ ShortScalaVersion, isBinaryPrevious, isBinarySame }
 
    /** Check if the given version is compatible with the current plug-in version.
    *  Check on the major/minor number, discard the maintenance number.
@@ -134,16 +137,9 @@ class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IReso
   }
 
   lazy val scalaVer = ScalaVersion.current
-  lazy val shortScalaVer = scalaVer match {
-    case ShortScalaVersion(major, minor) => f"$major%d.$minor%2d"
-    case _ => "none"
-  }
+  lazy val shortScalaVer = CompilerUtils.shortString(scalaVer)
 
   lazy val sdtCoreBundle = getBundle()
-  lazy val scalaCompilerBundle = Platform.getBundle(compilerPluginId)
-  lazy val scalaCompilerBundleVersion = scalaCompilerBundle.getVersion()
-  lazy val compilerClasses = OSGiUtils.getBundlePath(scalaCompilerBundle)
-  lazy val compilerSources = OSGiUtils.pathInBundle(sdtCoreBundle, "/target/src/scala-compiler-src.jar")
 
   lazy val sbtCompilerBundle = Platform.getBundle(sbtPluginId)
   lazy val sbtCompilerInterfaceBundle = Platform.getBundle(sbtCompilerInterfaceId)
@@ -151,31 +147,6 @@ class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IReso
   // Disable for now, until we introduce a way to have multiple scala libraries, compilers available for the builder
   //lazy val sbtScalaLib = pathInBundle(sbtCompilerBundle, "/lib/scala-" + shortScalaVer + "/lib/scala-library.jar")
   //lazy val sbtScalaCompiler = pathInBundle(sbtCompilerBundle, "/lib/scala-" + shortScalaVer + "/lib/scala-compiler.jar")
-
-  lazy val scalaLibBundle = {
-    // all library bundles
-    val bundles = Option(Platform.getBundles(libraryPluginId, null)).getOrElse(Array[Bundle]())
-    logger.debug("[scalaLibBundle] Found %d bundles: %s".format(bundles.size, bundles.toList.mkString(", ")))
-    bundles.find(b => b.getVersion().getMajor() == scalaCompilerBundleVersion.getMajor() && b.getVersion().getMinor() == scalaCompilerBundleVersion.getMinor()).getOrElse {
-      eclipseLog.error("Could not find a match for %s in %s. Using default.".format(scalaCompilerBundleVersion, bundles.toList.mkString(", ")), null)
-      Platform.getBundle(libraryPluginId)
-    }
-  }
-
-  lazy val libClasses = OSGiUtils.getBundlePath(scalaLibBundle)
-  lazy val libSources = OSGiUtils.pathInBundle(sdtCoreBundle, "/target/src/scala-library-src.jar")
-
-  // 2.10 specific libraries
-  lazy val scalaActorsBundle = Platform.getBundle(actorsPluginId)
-  lazy val actorsClasses = OSGiUtils.getBundlePath(Platform.getBundle(actorsPluginId))
-  lazy val actorsSources = OSGiUtils.pathInBundle(sdtCoreBundle, "/target/src/scala-actors-src.jar")
-
-  lazy val scalaReflectBundle = Platform.getBundle(reflectPluginId)
-  lazy val reflectClasses = OSGiUtils.getBundlePath(Platform.getBundle(reflectPluginId))
-  lazy val reflectSources = OSGiUtils.pathInBundle(sdtCoreBundle, "/target/src/scala-reflect-src.jar")
-
-  lazy val swingClasses = OSGiUtils.pathInBundle(sdtCoreBundle, "/target/lib/scala-swing.jar")
-  lazy val swingSources = OSGiUtils.pathInBundle(sdtCoreBundle, "/target/src/scala-swing-src.jar")
 
   lazy val templateManager = new ScalaTemplateManager()
   lazy val headlessMode = System.getProperty(ScalaPlugin.HeadlessTest) ne null
@@ -190,17 +161,25 @@ class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IReso
     if (!headlessMode) {
       PlatformUI.getWorkbench.getEditorRegistry.setDefaultEditor("*.scala", editorId)
       diagnostic.StartupDiagnostics.run
+
+      new RegistryExtender().perform()
     }
     ResourcesPlugin.getWorkspace.addResourceChangeListener(this, IResourceChangeEvent.PRE_CLOSE)
     JavaCore.addElementChangedListener(this)
-    logger.info("Scala compiler bundle: " + scalaCompilerBundle.getLocation)
-  }
+    logger.info("Scala compiler bundle: " + ScalaInstallation.platformInstallation.compiler.classJar.toOSString() )
+    }
 
   override def stop(context: BundleContext) = {
     ResourcesPlugin.getWorkspace.removeResourceChangeListener(this)
     super.stop(context)
     ScalaPlugin.plugin = null
   }
+
+  /** The compiler-interface store, located in this plugin configuration area (usually inside the metadata directory */
+  lazy val compilerInterfaceStore: CompilerInterfaceStore = new CompilerInterfaceStore(Platform.getStateLocation(sdtCoreBundle), this)
+
+  /** A LRU cache of class loaders for Scala builders */
+  lazy val classLoaderStore: FixedSizeCache[ScalaInstallation,ClassLoader] = new FixedSizeCache(initSize = 2, maxSize = 3)
 
   def workspaceRoot = ResourcesPlugin.getWorkspace.getRoot
 
@@ -279,7 +258,7 @@ class ScalaPlugin extends AbstractUIPlugin with PluginLogConfigurator with IReso
           innerDelta.getElement() match {
             // classpath change should only impact projects
             case javaProject: IJavaProject => {
-              asScalaProject(javaProject.getProject()).foreach(_.classpathHasChanged())
+              asScalaProject(javaProject.getProject()).foreach{ (p) => if (!p.isCheckingClassPath()) p.classpathHasChanged() }
             }
             case _ =>
           }

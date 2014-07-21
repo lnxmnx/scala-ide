@@ -3,6 +3,8 @@
 <plugin>
    <extension-point id="reconciliationParticipants" name="Reconcilation Participants" schema="schema/reconciliationParticipants.exsd"/>
    <extension-point id="sourcefileprovider" name="Source file Providers" schema="schema/sourceFileProviders.exsd"/>
+   <extension-point id="scalaHoverDebugOverride" name="Scala Hover Debug Override" schema="schema/scalaHoverDebugOverride.exsd"/>
+   <extension-point id="fileCreator" name="File Creator" schema="schema/fileCreator.exsd"/>
    <extension
          point="org.eclipse.ui.propertyPages">
       <page
@@ -113,6 +115,12 @@
             class="org.scalaide.ui.internal.preferences.EditorPreferencePage"
             id="org.scalaide.ui.preferences.editor"
             name="Editor">
+      </page>
+      <page
+            category="org.scalaide.ui.preferences"
+            class="org.scalaide.ui.internal.preferences.InstalledScalasPreferencePage"
+            id="org.scalaide.ui.preferences.scalas"
+            name="Installations">
       </page>
    </extension>
 
@@ -378,6 +386,16 @@
    </extension>
 
    <extension
+         id="scalaVersionProblem"
+         name="Scala Version Problem"
+         point="org.eclipse.core.resources.markers">
+      <super type="org.eclipse.core.resources.problemmarker"/>
+      <super type="org.eclipse.jdt.core.problem"/>
+      <super type="org.scala-ide.sdt.core.classpathProblem"/>
+      <persistent value="true"/>
+   </extension>
+
+   <extension
          id="settingProblem"
          name="Scala Setting Problem"
          point="org.eclipse.core.resources.markers">
@@ -419,6 +437,9 @@
       </type>
       <type
             name="scala.tools.eclipse.semantichighlighting.implicits.implicitConversionsOrArgsAnnotation"/>
+      <type
+            markerType="org.scalaide.refactoring.extractionScope"
+            name="org.scalaide.refactoring.extractionScope"/>
    </extension>
 
    <extension
@@ -442,6 +463,32 @@
           verticalRulerPreferenceKey="scala.tools.eclipse.ui.preferences.implicit.rulers.vertical"
           verticalRulerPreferenceValue="true">
      </specification>
+     <specification
+          annotationType="org.scalaide.refactoring.extractionScope"
+          colorPreferenceKey="extractionScope.color"
+          colorPreferenceValue="192,255,192"
+          contributesToHeader="false"
+          highlightPreferenceKey="extractionScope.highlight"
+          highlightPreferenceValue="true"
+          includeOnPreferencePage="true"
+          label="Code Selection Marker"
+          overviewRulerPreferenceKey="extractionScopeOverview"
+          overviewRulerPreferenceValue="true"
+          presentationLayer="0"
+          textPreferenceKey="extractionScope.text"
+          textPreferenceValue="true"
+          textStylePreferenceValue="BOX"
+          verticalRulerPreferenceKey="extractionScope.ruler"
+          verticalRulerPreferenceValue="true">
+     </specification>
+   </extension>
+
+   <extension
+     id="org.scalaide.refactoring.extractionScope"
+     name="Extraction Scope"
+     point="org.eclipse.core.resources.markers">
+     <super
+       type="org.eclipse.core.resources.textmarker"/>
    </extension>
 
     <extension
@@ -466,6 +513,30 @@
          name="Scala Library"
          class="org.scalaide.core.internal.containers.ScalaLibraryClasspathContainerPage">
       </classpathContainerPage>
+   </extension>
+   <extension point="org.eclipse.ui.ide.markerResolution">
+   <markerResolutionGenerator markerType="org.scala-ide.sdt.core.scalaVersionProblem" class="org.scalaide.core.internal.quickfix.BadScalaVersionMarkerResolver">
+   </markerResolutionGenerator>
+   </extension>
+   <extension point="org.eclipse.debug.core.statusHandlers">
+      <statusHandler
+       id="GenericHandler"
+       class="org.scalaide.ui.internal.handlers.GenericExceptionStatusHandler"
+       plugin="org.scala-ide.sdt.core"
+       code="1010">
+     </statusHandler>
+     <statusHandler
+       id="MissingScalaRequirement"
+       class="org.scalaide.ui.internal.handlers.MissingScalaRequirementHandler"
+       plugin="org.scala-ide.sdt.core"
+       code="1002">
+     </statusHandler>
+     <statusHandler
+       id="CompilerLaunchError"
+       class="org.scalaide.ui.internal.handlers.CompilerLaunchErrorHandler"
+       plugin="org.scala-ide.sdt.core"
+       code="1003">
+     </statusHandler>
    </extension>
    <extension point = "org.eclipse.debug.core.launchConfigurationTypes">
      <launchConfigurationType
@@ -1011,16 +1082,16 @@
          name="Move Class/Object/Trait"/>
       <command
          categoryId="org.scalaide.ui.menu.refactoring"
-         id="org.scalaide.refactoring.ExtractMethod"
-         name="Extract Method"/>
-      <command
-         categoryId="org.scalaide.ui.menu.refactoring"
          id="org.scalaide.refactoring.ExtractLocal"
          name="Extract Local"/>
       <command
          categoryId="org.scalaide.ui.menu.refactoring"
          id="org.scalaide.refactoring.InlineLocal"
          name="Inline Local"/>
+      <command
+         categoryId="org.scalaide.ui.menu.refactoring"
+         id="org.scalaide.refactoring.Extract"
+         name="Extract..."/>
       <command
          categoryId="org.scalaide.ui.menu.refactoring"
          id="org.scalaide.refactoring.OrganizeImports"
@@ -1039,7 +1110,7 @@
          name="Toggle Implicits Display"/>
       <command
          categoryId="org.eclipse.debug.ui.category.run"
-         id="scala.tools.eclipse.interpreter.RunSelection"
+         id="org.scalaide.core.handler.RunSelection"
          name="Send Selection to Scala Interpreter"/>
       <command
          categoryId="scala.tools.eclipse.category"
@@ -1090,11 +1161,6 @@
          contextId="scala.tools.eclipse.scalaEditorScope"
          sequence="M2+M3+T"/>
    <key
-   		 commandId="org.scalaide.refactoring.ExtractMethod"
-   		 schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
-   		 contextId="scala.tools.eclipse.scalaEditorScope"
-   		 sequence="M2+M3+M"/>
-   <key
    		 commandId="org.scalaide.refactoring.ExtractLocal"
    		 schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
    		 contextId="scala.tools.eclipse.scalaEditorScope"
@@ -1104,6 +1170,11 @@
    		 schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
    		 contextId="scala.tools.eclipse.scalaEditorScope"
    		 sequence="M2+M3+I"/>
+   <key
+   		 commandId="org.scalaide.refactoring.Extract"
+   		 schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+   		 contextId="scala.tools.eclipse.scalaEditorScope"
+   		 sequence="M2+M3+E"/>
    <key
    		 commandId="org.scalaide.refactoring.Rename"
    		 schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
@@ -1132,7 +1203,7 @@
        contextId="scala.tools.eclipse.scalaEditorScope"
        sequence="M1+M2+I"/>
    <key
-       commandId="scala.tools.eclipse.interpreter.RunSelection"
+       commandId="org.scalaide.core.handler.RunSelection"
        schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
        contextId="scala.tools.eclipse.scalaEditorScope"
        sequence="M1+M2+X"/>
@@ -1148,6 +1219,9 @@
     </contextType>
     <include
         file="templates/default-templates.xml">
+    </include>
+    <include
+          file="templates/wizard-templates.xml">
     </include>
   </extension>
 
@@ -1206,30 +1280,8 @@
           commandId="org.scalaide.refactoring.InlineLocal">
     </handler>
     <handler
-          class="org.scalaide.refactoring.internal.ExtractLocal"
-          commandId="org.scalaide.refactoring.ExtractLocal">
-       <enabledWhen>
-          <with
-                variable="selection">
-             <test
-                   property="org.scalaide.ui.internal.editor.nonEmpty"
-                   value="true">
-             </test>
-          </with>
-       </enabledWhen>
-    </handler>
-    <handler
-          class="org.scalaide.refactoring.internal.ExtractMethod"
-          commandId="org.scalaide.refactoring.ExtractMethod">
-       <enabledWhen>
-          <with
-                variable="selection">
-             <test
-                   property="org.scalaide.ui.internal.editor.nonEmpty"
-                   value="true">
-             </test>
-          </with>
-       </enabledWhen>
+          class="org.scalaide.refactoring.internal.extract.Extract"
+          commandId="org.scalaide.refactoring.Extract">
     </handler>
     <handler
           class="org.scalaide.refactoring.internal.move.MoveClass"
@@ -1242,6 +1294,10 @@
     <handler
           class="org.scalaide.refactoring.internal.MoveConstructorToCompanionObject"
           commandId="org.scalaide.refactoring.MoveConstructorToCompanionObject">
+    </handler>
+    <handler
+          class="org.scalaide.ui.internal.actions.RunSelection"
+          commandId="org.scalaide.core.handler.RunSelection">
     </handler>
  </extension>
  <extension
@@ -1276,6 +1332,14 @@
                 icon="icons/indent_guide.png"
                 label="Show Indent Guide"
                 style="toggle">
+          </command>
+          <command
+                commandId="org.scalaide.core.handler.RunSelection"
+                disabledIcon="icons/full/dtool16/run_interpreter.gif"
+                icon="icons/full/etool16/run_interpreter.gif"
+                label="Run Selection in Scala Interpreter"
+                style="push"
+                tooltip="Run Selection in Scala Interpreter">
           </command>
        </toolbar>
     </menuContribution>
@@ -1374,6 +1438,16 @@
                 tooltip="Split parameter lists">
           </command>
           <separator
+                name="org.scalaide.refactoring.separator.codeExtractionGroup"
+                visible="true">
+          </separator>
+          <command
+                commandId="org.scalaide.refactoring.Extract"
+                label="Extract..."
+                style="push"
+                tooltip="Extract...">
+          </command>
+          <separator
                 name="org.scalaide.refactoring.separator.sourceGeneratorGroup"
                 visible="true">
           </separator>
@@ -1400,12 +1474,6 @@
                 label="Extract Local"
                 style="push"
                 tooltip="Extract Local">
-          </command>
-          <command
-                commandId="org.scalaide.refactoring.ExtractMethod"
-                label="Extract Method"
-                style="push"
-                tooltip="Extract Method">
           </command>
           <command
                 commandId="org.scalaide.refactoring.MoveClass"
@@ -1548,7 +1616,7 @@
        </description>
     </decorator>
  </extension>
-   <extension
+ <extension
         id="scala.tools.eclipse.macroMarkerId"
         name="Macro expansion"
         point="org.eclipse.core.resources.markers">
@@ -1642,7 +1710,7 @@
           verticalRulerPreferenceKey="scala.tools.eclipse.ui.preferences.implicit.rulers.vertical"
           verticalRulerPreferenceValue="true">
      </specification>
- + </extension>
+  </extension>
   <extension
         point="org.eclipse.ui.editorActions">
      <editorContribution
@@ -1656,4 +1724,63 @@
            </action>
      </editorContribution>
   </extension>
+ <extension
+       point="org.scala-ide.sdt.core.fileCreator">
+    <fileCreator
+          class="org.scalaide.ui.wizards.ClassCreator"
+          description="Create a Scala Class"
+          icon="icons/full/etool16/newclass_wiz.gif"
+          id="org.scalaide.ui.wizards.classCreator"
+          name="Scala Class"
+          templateId="org.scalaide.core.templates.wizards.class">
+    </fileCreator>
+    <fileCreator
+          class="org.scalaide.ui.wizards.TraitCreator"
+          description="Create a Scala Trait"
+          icon="icons/full/etool16/newtrait_wiz.gif"
+          id="org.scalaide.ui.wizards.traitCreator"
+          name="Scala Trait"
+          templateId="org.scalaide.core.templates.wizards.trait">
+    </fileCreator>
+    <fileCreator
+          class="org.scalaide.ui.wizards.ObjectCreator"
+          description="Create a Scala Object"
+          icon="icons/full/etool16/newobject_wiz.gif"
+          id="org.scalaide.ui.wizards.objectCreator"
+          name="Scala Object"
+          templateId="org.scalaide.core.templates.wizards.object">
+    </fileCreator>
+    <fileCreator
+          class="org.scalaide.ui.wizards.PackageObjectCreator"
+          description="Create a Scala Package Object"
+          icon="icons/full/etool16/newpackage_object_wiz.png"
+          id="org.scalaide.ui.wizards.packageObjectCreator"
+          name="Scala Package Object"
+          templateId="org.scalaide.core.templates.wizards.packageObject">
+    </fileCreator>
+    <fileCreator
+          class="org.scalaide.ui.wizards.AppCreator"
+          description="Create a Scala App"
+          icon="icons/full/etool16/scala_app.gif"
+          id="org.scalaide.ui.wizards.appCreator"
+          name="Scala App"
+          templateId="org.scalaide.core.templates.wizards.app">
+    </fileCreator>
+    <fileCreator
+          class="org.scalaide.ui.wizards.EmptyFileCreator"
+          description="Creates an empty file"
+          icon="icons/full/etool16/newfile_wiz.gif"
+          id="org.scalaide.ui.wizards.empty"
+          name="Empty File"
+          templateId="org.scalaide.core.templates.wizards.empty">
+    </fileCreator>
+    <fileCreator
+          class="org.scalaide.ui.wizards.ClassCreator"
+          description="Create a Scala File"
+          icon="icons/full/etool16/newclass_wiz.gif"
+          id="org.scalaide.ui.wizards.scalaCreator"
+          name="New Scala File"
+          templateId="org.scalaide.core.templates.wizards.class">
+    </fileCreator>
+ </extension>
 </plugin>

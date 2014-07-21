@@ -17,9 +17,16 @@ import org.eclipse.core.runtime.Platform
 import org.scalaide.ui.internal.actions.OpenExternalFile
 import org.scalaide.logging.LogManager
 import org.scalaide.core.ScalaPlugin
+import org.scalaide.core.internal.project.ScalaInstallation
 
 
 class ReportBugDialog(shell: Shell) extends Dialog(shell) {
+
+  /** Overwritten in order to set the title text. */
+  override def configureShell(sh: Shell): Unit = {
+    super.configureShell(sh)
+    sh.setText("Bug Reporter")
+  }
 
   protected override def isResizable = true
 
@@ -36,10 +43,15 @@ class ReportBugDialog(shell: Shell) extends Dialog(shell) {
     val messageField = new Text(group1, SWT.READ_ONLY | SWT.MULTI | SWT.BORDER)
     messageField.setLayoutData(new GridData(GridData.GRAB_HORIZONTAL | GridData.HORIZONTAL_ALIGN_FILL))
     messageField.setText(
-        "Scala plugin version: " + ScalaPlugin.plugin.getBundle.getVersion + "\n\n" +
-        "Scala compiler version:\t" + ScalaPlugin.plugin.scalaCompilerBundleVersion + "\n" +
-        "Scala library version:\t" + ScalaPlugin.plugin.scalaLibBundle.getVersion + "\n" +
-        "Eclipse version: " + Platform.getBundle("org.eclipse.platform").getVersion)
+        s"""|Scala IDE version:
+            |        ${ScalaPlugin.plugin.getBundle.getVersion}
+            |Scala compiler version:
+            |        ${ScalaPlugin.plugin.scalaVer.unparse}
+            |Scala library version:
+            |        ${ScalaInstallation.platformInstallation.version.unparse}
+            |Eclipse version:
+            |        ${Platform.getBundle("org.eclipse.platform").getVersion}
+            |""".stripMargin)
 
     val group2 = new Group(control, SWT.SHADOW_NONE)
     group2.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false))
@@ -53,7 +65,7 @@ class ReportBugDialog(shell: Shell) extends Dialog(shell) {
     logFileLink.addListener(SWT.Selection, OpenExternalFile(LogManager.logFile))
 
     val reportBugLink = new Link(group2, SWT.NONE)
-    reportBugLink.setText("and <a href=\"" + ScalaPlugin.IssueTracker + "\">report a bug</a>.")
+    reportBugLink.setText(s""" and <a href="${ScalaPlugin.IssueTracker}">report a bug</a>.""")
     reportBugLink.addListener(SWT.Selection, new LinkListener())
 
     control

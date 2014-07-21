@@ -8,7 +8,7 @@
   </parent>
   <artifactId>org.scala-ide.sdt.core.tests</artifactId>
   <packaging>eclipse-test-plugin</packaging>
-  
+
   <dependencies>
     <dependency>
       <groupId>org.mockito</groupId>
@@ -24,10 +24,12 @@
         <dependency>
           <groupId>org.scala-lang</groupId>
           <artifactId>scala-compiler</artifactId>
+          <version>${scala.version}</version>
         </dependency>
         <dependency>
           <groupId>org.scala-lang</groupId>
           <artifactId>scala-reflect</artifactId>
+          <version>${scala.version}</version>
         </dependency>
       </dependencies>
       <build>
@@ -118,7 +120,7 @@
         <configuration>
           <redirectTestOutputToFile>true</redirectTestOutputToFile>
           <testSuite>${project.artifactId}</testSuite>
-          <testClass>org.scalaide.core.TestsSuite</testClass>
+          <testClass>org.scalaide.TestsSuite</testClass>
         </configuration>
       </plugin>
       <plugin>

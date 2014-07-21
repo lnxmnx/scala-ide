@@ -10,23 +10,6 @@ import org.eclipse.core.runtime.Path
 
 trait ScalaJavaMapper extends ScalaAnnotationHelper with HasLogger { self : ScalaPresentationCompiler =>
 
-  @deprecated("Remove this when dropping Scala 2.10 support. See SI-8030", "4.0")
-  private[core] def initializeRequiredSymbols() {
-    import definitions._
-    val symbols = Vector(UnitClass,
-      BooleanClass,
-      ByteClass,
-      ShortClass,
-      IntClass,
-      LongClass,
-      FloatClass,
-      DoubleClass,
-      NilModule,
-      ListClass) ++ TupleClass.seq
-
-    symbols.foreach(_.initialize)
-  }
-
   /** Return the Java Element corresponding to the given Scala Symbol, looking in the
    *  given project list
    *
@@ -36,20 +19,26 @@ trait ScalaJavaMapper extends ScalaAnnotationHelper with HasLogger { self : Scal
     assert(sym ne null)
     if (sym == NoSymbol) return None
 
+    // this can be computed only once, to minimize the number of askOption calls
+    val (symName, symParamsTpe) = askOption { () =>
+      val symName = if (sym.isConstructor)
+        sym.owner.simpleName.toString + (if (sym.owner.isModuleClass) "$" else "")
+      else sym.name.toString
+
+      val symParamsTpe = sym.paramss.flatten.map(param => mapParamTypeSignature(param.tpe))
+      (symName, symParamsTpe)
+    } getOrElse (("", Nil))
+
     def matchesMethod(meth: IMethod): Boolean = {
       import Signature._
-      askOption { () =>
-        lazy val methName = meth.getElementName
-        lazy val symName = (if(sym.isConstructor) sym.owner.simpleName.toString + (if (sym.owner.isModuleClass) "$" else "") else sym.name.toString)
-        lazy val sameName = methName == symName
-        lazy val methParamsTpe = meth.getParameterTypes.map(tp => getTypeErasure(getElementType(tp)))
-        lazy val symParamsTpe = sym.paramss.flatten.map(param => mapParamTypeSignature(param.tpe))
-        lazy val sameParams = methParamsTpe.sameElements(symParamsTpe)
-        sameName && sameParams
-      }.getOrElse(false)
+      val sameName = meth.getElementName == symName
+      sameName && {
+        val methParamsTpe = meth.getParameterTypes.map(tp => getTypeErasure(getElementType(tp)))
+        methParamsTpe.sameElements(symParamsTpe)
+      }
     }
 
-    if (sym.isPackage) {
+    if (sym.hasPackageFlag) {
       val fullName = sym.fullName
       val results = projects.map(p => Option(p.findElement(new Path(fullName.replace('.', '/')))))
       results.flatten.headOption
@@ -64,7 +53,7 @@ trait ScalaJavaMapper extends ScalaAnnotationHelper with HasLogger { self : Scal
           if (sym.isMethod && !isConcreteGetterOrSetter) ownerClass.getMethods.find(matchesMethod)
           else {
             val fieldName =
-              if(self.nme.isLocalName(sym.name)) self.nme.localToGetter(sym.name.toTermName)
+              if(self.nme.isLocalName(sym.name)) sym.name.dropLocal
               else sym.name
 
             ownerClass.getFields.find(_.getElementName == fieldName.toString)
