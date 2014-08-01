@@ -105,6 +105,12 @@
             name="Implicits">
       </page>
       <page
+            category="org.scalaide.ui.preferences.editor"
+            class="org.scalaide.ui.internal.preferences.MacrosPreferencePage"
+            id="org.scalaide.ui.preferences.editor.macros"
+            name="Macros">
+      </page>
+      <page
             category="org.scalaide.ui.preferences"
             class="org.scalaide.logging.ui.preferences.LoggingPreferencePage"
             id="org.scalaide.ui.preferences.logging"
@@ -1109,6 +1115,10 @@
          id="org.scala-ide.sdt.core.commands.ToggleImplicitsDisplay"
          name="Toggle Implicits Display"/>
       <command
+         categoryId="scala.tools.eclipse.category"
+         id="org.scala-ide.sdt.core.commands.ToggleMacrosDisplay"
+         name="Toggle Macros Display"/>   
+      <command
          categoryId="org.eclipse.debug.ui.category.run"
          id="org.scalaide.core.handler.RunSelection"
          name="Send Selection to Scala Interpreter"/>
@@ -1203,6 +1213,11 @@
        contextId="scala.tools.eclipse.scalaEditorScope"
        sequence="M1+M2+I"/>
    <key
+       commandId="org.scala-ide.sdt.core.commands.ToggleMacrosDisplay"
+       schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+       contextId="scala.tools.eclipse.scalaEditorScope"
+       sequence="M1+M2+M"/>
+   <key
        commandId="org.scalaide.core.handler.RunSelection"
        schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
        contextId="scala.tools.eclipse.scalaEditorScope"
@@ -1230,6 +1245,10 @@
     <handler
           class="org.scalaide.ui.internal.editor.decorators.implicits.ToggleImplicitsDisplayHandler"
           commandId="org.scala-ide.sdt.core.commands.ToggleImplicitsDisplay">
+    </handler>
+    <handler
+          class="org.scalaide.ui.internal.editor.decorators.macros.ToggleMacrosDisplayHandler"
+          commandId="org.scala-ide.sdt.core.commands.ToggleMacrosDisplay">
     </handler>
     <handler
           class="org.scalaide.ui.internal.actions.ShowTypeOfSelectionCommand"
@@ -1312,6 +1331,13 @@
                 icon="icons/full/elcl16/implicit_co.gif"
                 id="org.scala-ide.sdt.core.toolbar.ToggleImplicitsDisplay"
                 label="Toggle Implicits Display"
+                style="toggle">
+          </command>
+          <command
+                commandId="org.scala-ide.sdt.core.commands.ToggleMacrosDisplay"
+                icon="icons/full/elcl16/macro_icon.png"
+                id="org.scala-ide.sdt.core.toolbar.ToggleMacosDisplay"
+                label="Toggle Macros Display"
                 style="toggle">
           </command>
           <command
