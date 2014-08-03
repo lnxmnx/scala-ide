@@ -21,6 +21,28 @@ class MacroAnnotationActionDelegate extends AbstractRulerActionDelegate {
     private val annotationModel = iTextEditor.getDocumentProvider.getAnnotationModel(editorInput)
     private val document = iTextEditor.getDocumentProvider.getDocument(editorInput)
 
+    val fTextFileBuffer = {
+      import org.eclipse.ui.editors.text.TextFileDocumentProvider
+      import org.eclipse.ui.texteditor.AbstractDecoratedTextEditor
+      val documentProvier = iTextEditor.asInstanceOf[AbstractDecoratedTextEditor].getDocumentProvider().asInstanceOf[TextFileDocumentProvider]
+      val documentProviderClass = Class.forName("org.eclipse.ui.editors.text.TextFileDocumentProvider")
+      val fFileInfoMapField = documentProviderClass.getDeclaredField("fFileInfoMap")
+      fFileInfoMapField.setAccessible(true)
+      val fileInfoMap = fFileInfoMapField.get(documentProvier).asInstanceOf[java.util.Map[Any, Any]] // Map
+
+      val fileInfo = fileInfoMap.get(editorInput).asInstanceOf[TextFileDocumentProvider.FileInfo]
+
+      fileInfo.fTextFileBuffer
+    }
+
+    def replaceWithoutDirtyState(offset: Int, length: Int, text: String){
+        val previousDirtyState = fTextFileBuffer.isDirty
+        iTextEditor.asInstanceOf[ScalaSourceFileEditor].macroReplaceStart(previousDirtyState)
+        document.replace(offset, length, text)
+        fTextFileBuffer.setDirty(previousDirtyState)
+        iTextEditor.asInstanceOf[ScalaSourceFileEditor].macroReplaceEnd()
+    }
+
     private def findAnnotationsOnLine(line: Int, annotationType: String) = {
       val annotations = annotationModel.getAnnotationIterator.toList
       val annotationIterator = for {
@@ -70,7 +92,7 @@ class MacroAnnotationActionDelegate extends AbstractRulerActionDelegate {
         }
 
         annotationModel.removeAnnotation(annotation)
-        document.replace(pOffset, pLength, indentedMacroExpansion)
+        replaceWithoutDirtyState(pOffset, pLength, indentedMacroExpansion)
       })
 
       if (annotations2Expand.isEmpty) {
@@ -82,7 +104,7 @@ class MacroAnnotationActionDelegate extends AbstractRulerActionDelegate {
           val marker = annotation.asInstanceOf[MarkerAnnotation].getMarker
           val macroExpandee = marker.getAttribute("macroExpandee").asInstanceOf[String]
 
-          document.replace(position.offset, position.length, macroExpandee)
+          replaceWithoutDirtyState(position.offset, position.length, macroExpandee)
 
           marker.delete
           annotationModel.removeAnnotation(annotation)

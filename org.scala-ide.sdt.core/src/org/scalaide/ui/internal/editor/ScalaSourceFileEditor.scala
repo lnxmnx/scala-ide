@@ -73,6 +73,18 @@ class ScalaSourceFileEditor extends CompilationUnitEditor with ScalaCompilationU
     verticalRuler
   }
 
+  var isDirtyState: Option[Boolean] = None
+  def macroReplaceStart(dirtyState: Boolean) {
+    isDirtyState = Some(dirtyState)
+  }
+  def macroReplaceEnd() {
+    isDirtyState = None
+  }
+
+  override def isDirty =
+    if (isDirtyState.isDefined) isDirtyState.get
+    else super.isDirty()
+
   override def performSave(overwrite: Boolean, progressMonitor: IProgressMonitor) {
     removeMacroExpansions()
     super.performSave(overwrite, progressMonitor)

@@ -131,7 +131,7 @@ abstract class BaseSemanticAction(
         case Some(properties) if pluginStore.getBoolean(properties.active) || macroEnabled =>
           if(pluginStore.getBoolean(properties.active)) implicitEnabled = true
           findAnnotations()
-        case None => 
+        case None =>
           implicitEnabled = true
           findAnnotations() // properties disabled, count as active
         case _ => Map.empty
